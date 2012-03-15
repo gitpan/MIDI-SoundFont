@@ -1,0 +1,266 @@
+#! /usr/bin/perl
+#########################################################################
+#        This Perl script is Copyright (c) 2012, Peter J Billam         #
+#                          www.pjb.com.au                               #
+#                                                                       #
+#     This script is free software; you can redistribute it and/or      #
+#            modify it under the same terms as Perl itself.             #
+#########################################################################
+
+use MIDI::SoundFont();
+eval 'require Term::Clui'; if ($@) {
+	die "you'll need to install the Term::Clui module from www.cpan.org\n";
+}
+my $Version       = '1.0';
+my $VersionDate   = '24feb2012';
+use bytes;
+
+my @Banks = ();
+while ($ARGV[$[] =~ /^-([a-z])/) {
+	if ($1 eq 'v')      { shift;
+		my $n = $0; $n =~ s{^.*/([^/]+)$}{$1};
+		print "$n version $Version $VersionDate\n";
+		exit 0;
+	} elsif ($1 eq 'b') { shift; @Banks = split ',', shift;
+	} else {
+		print "usage:\n";  my $synopsis = 0;
+		while (<DATA>) {
+			if (/^=head1 SYNOPSIS/)     { $synopsis = 1; next; }
+			if ($synopsis && /^=head1/) { last; }
+			if ($synopsis && /\S/)      { s/^\s*/   /; print $_; next; }
+		}
+		exit 0;
+	}
+}
+my $file = $ARGV[$[];
+my $file_type = filetype($file);
+my $Saved = 1;
+my $SavedFile = $file;
+
+if ($file_type eq 'sf2') {
+	my %sf = MIDI::SoundFont::file2sf($file);
+	print "$sf{'INAM'}\n$sf{'IENG'}\n";
+	if ($sf{'ICRD'}) { print "$sf{'ICRD'}\n"; }
+	my @tasks = sort ('Move bank', 'Move patch', 'Copy patch',
+	   'Edit INFO', 'Import gravis', 'Import wav', 'List', 'Delete bank',
+	   'Delete patch', 'Write', 'Config', 'Quit');
+	Term::Clui::set_default("do what with $file ?", 'List');
+	while (1) {
+		my $task = Term::Clui::choose("do what with $file ?", @tasks);
+		if (! $task or $task eq 'Quit')    { last; }
+		if ($task eq 'Move bank')          { sf_move_bank(%sf);
+		} elsif ($task eq 'Move patch')    {
+		} elsif ($task eq 'Copy patch')    {
+		} elsif ($task eq 'Edit INFO')     { sf_edit_info(\%sf);
+		} elsif ($task eq 'Import gravis') {
+		} elsif ($task eq 'Import wav')    {
+		} elsif ($task eq 'List')          { sf_list(%sf);
+		} elsif ($task eq 'Delete bank')   { sf_delete_bank(%sf);
+		} elsif ($task eq 'Delete patch')  {
+		} elsif ($task eq 'Write')         { sf_write(%sf);
+		} elsif ($task eq 'Config')        { config(%sf);
+		}
+	}
+	if ((! $Saved) && Term::Clui::confirm(" save file ?")) { sf_write(%sf) }
+	exit;
+} elsif ($file_type eq 'pat') {
+	my %gr = MIDI::SoundFont::file2gravis($file);
+	my @tasks = sort ('Edit INFO', 'List', 'Write', 'Config', 'Quit');
+	Term::Clui::set_default("do what with $file ?", 'List');
+	while (1) {
+		my $task = Term::Clui::choose("do what with $file ?", @tasks);
+		if (! $task or $task eq 'Quit')    { last; }
+		if      ($task eq 'Edit INFO')     { gr_edit_info(\%gr);
+		} elsif ($task eq 'List')          { gr_list(%gr);
+		} elsif ($task eq 'Write')         { gr_write(%gr);
+		} elsif ($task eq 'Config')        { config(%gr);
+		}
+	}
+	if ((! $Saved) && Term::Clui::confirm(" save file ?")) {gr_write(%gr);}
+	exit;
+} elsif ($file_type eq 'zip') {
+	my %gr = MIDI::SoundFont::file2gravis($file);
+	my @tasks = sort ( 'Edit INFO', 'Import sf2', 'Import wav',
+	  'List', 'Delete patch', 'Write', 'Config', 'Quit');
+	while (1) {
+		my $task = Term::Clui::choose("do what with $file ?", @tasks);
+		if (! $task or $task eq 'Quit')    { last; }
+		if      ($task eq 'Edit INFO')     { gr_edit_info(\%gr);
+		} elsif ($task eq 'Import sf2') {
+		} elsif ($task eq 'Import wav')    {
+		} elsif ($task eq 'List')          { gr_list(%gr);
+		} elsif ($task eq 'Delete patch')  { gr_delete_patch(%gr);
+		} elsif ($task eq 'Write')         { gr_write(%gr);
+		} elsif ($task eq 'Config')        { config(%gr);
+		}
+	}
+	if ((! $Saved) && Term::Clui::confirm(" save file ?")) {gr_write(%gr);}
+	exit;
+} elsif ($file_type eq '') {
+	warn " unrecognised file type; should be .sf2, .zip, or .pat\n";
+}
+exit;
+
+# -----------------------------------------------------------------
+
+sub filetype { my $f = $_[$[];
+	if (! open(F, $f)) { die "can't open $f: $!\n"; }
+	read F, my $s, 12;
+	close F;
+	if ($s =~ /^RIFF....sfbk/) { return 'sf2'; }
+	if ($s =~ /^PK/) { return 'zip'; }
+	if ($s =~ /^GF1PATCH/) { return 'pat'; }
+	if ($f =~ /.sf2$/) { return 'sf2'; }
+	if ($f =~ /.zip$/) { return 'zip'; }
+	if ($f =~ /.pat$/) { return 'pat'; }
+	return '';
+}
+
+# ------------------- soundfont functionality -------------------
+
+sub config {
+	my $text = MIDI::SoundFont::timidity_cfg($SavedFile, @_);
+	Term::Clui::view('suggested_timidity_cfg', $text);
+}
+
+sub sf_banks { my %sf = @_;
+	my @phdr_list = @{$sf{'phdr'}};
+	my %banks = ();
+	foreach my $p_ref (@phdr_list) {
+		$banks{$p_ref->{'wBank'}} +=1 ;
+	}
+	return sort {$a <=> $b} keys %banks;
+}
+
+sub sf_edit_info { my $sf_ref = $_[0];
+	my @tasks = ('ICMT', 'ICOP', 'IENG', 'INAM');
+	while (1) {
+		my $task = Term::Clui::choose(" edit which INFO-field ?", @tasks);
+		if (! $task) { last; }
+		my $text = $sf_ref->{$task};
+		my $newtext = Term::Clui::edit("INFO/$task", $text);
+		if (Term::Clui::confirm(" OK to replace $task field ?")) {
+			$newtext =~ s/(\S)\n(\S)/$1 $2/;
+			$newtext =~ tr/\n//d;
+			$sf_ref->{$task} = $newtext;
+			$Saved = 0;
+		}
+	}
+}
+
+sub sf_unused_banks { my %sf = @_;
+	my %banks = map { $_, 1 } (0..127);
+	foreach my $used (sf_banks(%sf)) { delete $banks{$used}; }
+	return sort {$a <=> $b} keys %banks;
+}
+
+sub sf_list { my %sf = @_;
+	my @phdr_list = @{$sf{'phdr'}};
+	if (@Banks) {
+		my %banks = map { $_, 1 } @Banks;
+		my @short_list = ();
+		foreach my $p_ref (@phdr_list) {
+			if ($banks{$p_ref->{'wBank'}}) { push @short_list, $p_ref; }
+		}
+		@phdr_list = @short_list;
+	}
+	@phdr_list = sort { (1000*$a->{'wBank'}+$a->{'wPreset'})
+	  <=> (1000*$b->{'wBank'}+$b->{'wPreset'})} @phdr_list;
+	my @text = ();
+	foreach my $p_ref (@phdr_list) {
+		push @text, "bank $p_ref->{'wBank'} patch $p_ref->{'wPreset'} "
+	 	. " # $p_ref->{'achPresetName'}\n";
+	}
+	Term::Clui::view($file, join('',@text));
+}
+
+sub sf_move_bank { my %sf = @_;
+	my $from = Term::Clui::choose(" move which bank ?", sf_banks(%sf));
+	if (! defined $from) { return; }
+	my $to = Term::Clui::choose(" to which bank ?", sf_unused_banks(%sf));
+	if (! defined $to) { return; }
+	foreach my $p_ref (@{$sf{'phdr'}}) {
+		if ($p_ref->{'wBank'} == $from) { $p_ref->{'wBank'} = $to; }
+	}
+	$Saved = 0;
+}
+
+sub sf_write { my %sf = @_;
+	my $file = Term::Clui::ask_filename(" write to which file ?");
+	if (! $file) { return; }
+	if ((-e $file) && (! Term::Clui::confirm(" OK to overwrite $file ?"))) {
+		return;
+	}
+	MIDI::SoundFont::sf2file($file, %sf);
+	$SavedFile = $file;
+	$Saved = 1;
+}
+
+# --------------------- gravis functionality -------------------
+
+sub gr_write { my %gr = @_;
+	my $file = Term::Clui::ask_filename(" write to which file ?");
+	if (! $file) { return; }
+	if ((-e $file) && (! Term::Clui::confirm(" OK to overwrite $file ?"))) {
+		return;
+	}
+	MIDI::SoundFont::gravis2file($file, %gr);
+	$SavedFile = $file;
+	$Saved = 1;
+}
+
+__END__
+
+=pod
+
+=head1 NAME
+
+sf_edit - manipulates banks of an sf2 SoundfFont file
+
+=head1 SYNOPSIS
+
+ sf_edit -v                        # prints vesion
+
+ sf_edit FileName.sf2
+
+ sf_edit Grork.zip
+
+=head1 DESCRIPTION
+
+This script uses the CPAN module MIDI::SoundFont
+to manipulate the banks and patches of an B<.sf2> SoundfFont file,
+or the patches of a B<.zip> file of Gravis patches.
+It is distributed in the ./examples subdirectory of the MIDI::SoundFont module.
+
+=back
+
+=head1 OPTIONS
+
+=over 3
+
+=item I<-v>
+
+Prints version number.
+
+=back
+
+=head1 CHANGES
+
+ 20120224  1.0  first working version
+
+=head1 AUTHOR
+
+Peter J Billam   http://www.pjb.com.au/comp/contact.html
+
+=head1 SEE ALSO
+
+ MIDI::SoundFont
+ Term::Clui
+ String::Approx
+ Archive::Zip
+ timidity (1)
+ http://www.pjb.com.au/
+ http://www.pjb.com.au/muscript/index.html#midi
+
+=cut
+
