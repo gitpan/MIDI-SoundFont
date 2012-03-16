@@ -6,28 +6,19 @@
 #     This script is free software; you can redistribute it and/or      #
 #            modify it under the same terms as Perl itself.             #
 #########################################################################
-# 20120310:
-# using sf_edit to change the banks, and saving to /tmp/k.sf2
-# timidity -idvv -x 'soundfont /tmp/k.sf2' /tmp/t.mid | less
-# inst e.g. Tuba is much duplicated, giving 729 ihdr's :-( (82 in original)
-# parse_layer: too deep instrument level
-# shdr:
-# /tmp/k.sf2: illegal list numbers -3566
-# /tmp/k.sf2: illegal list numbers -36581
-# So: test.pl should check length of inst, ihdr etc
 # perhaps it could also run timidity -idvv -x for an independent opinion
 
-require './SoundFont.pm';
-# use Class::MakeMethods::Utility::Ref qw( ref_clone ref_compare );
+use MIDI::SoundFont;
 use Data::Dumper;
 $Data::Dumper::Indent = 1;
 $Data::Dumper::Quotekeys = 0;
 $Data::Dumper::Sortkeys = 1;
 $Data::Dumper::Terse = 1;
 use Test::Simple tests => 43;
+# use Class::MakeMethods::Utility::Ref qw( ref_clone ref_compare );
 use bytes;
-my %sf = MIDI::SoundFont::file2sf('doc/Jeux14.sf2');
 
+my %sf = MIDI::SoundFont::file2sf('doc/Jeux14.sf2');
 ok($sf{'ifil'} eq '2.1', "ifil was 2.1");
 ok($sf{'INAM'} =~ /^JEUX version/, "INAM starts with 'JEUX version'");
 ok($sf{'isng'} eq 'EMU8000', "isng was EMU8000");
@@ -109,7 +100,6 @@ ok(equal($sf{'shdr'}{'Flute 7-3'},$sf2{'shdr'}{'Flute 7-3'}),
  "sf{'shdr'}{'Flute 7-3'} is unchanged");
 ok(equal($sf{'inst'}{'Principal 2'},$sf2{'inst'}{'Principal 2'}),
  "sf{'inst'}{'Principal 2'} is unchanged");
-
 
 #---------------------------------------------------------
 
@@ -196,7 +186,7 @@ Peter J Billam  http://www.pjb.com.au/comp/contact.html
 
 =head1 SEE ALSO
 
- MIDI::ALSA.pm
+ MIDI::ALSA
  http://www.pjb.com.au/
  http://www.pjb.com.au/midi/
  http://www.pjb.com.au/comp/

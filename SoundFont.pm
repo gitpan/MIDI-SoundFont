@@ -11,21 +11,19 @@ package MIDI::SoundFont;
 no strict;
 use bytes;
 #my $debug = 1; use Data::Dumper;
-$VERSION = '1.00';
-# 20120211 1.01 first released version
+$VERSION = '1.01';
+# 20120216 1.01 gravis2file writes .zip files
+# 20120215 1.00 first released version
 
-# gives a -w warning, but I'm afraid $VERSION .= ''; would confuse CPAN
 require Exporter;
 require DynaLoader;
 @ISA = qw(Exporter DynaLoader);
 @EXPORT = ();
 @EXPORT_OK = qw(
  GeneratorOperators genAmountType 
- bytes2sf file2sf sf2bytes sf2file
- bytes2gravis file2gravis gravis2bytes gravis2file
- timidity_cfg
+ bytes2sf file2sf sf2bytes sf2file file2gravis gravis2file timidity_cfg
 );
-@EXPORT_CONSTS = ();
+@EXPORT_CONSTS = qw(GeneratorOperators genAmountType);
 %EXPORT_TAGS = (ALL => [@EXPORT,@EXPORT_OK], CONSTS => [@EXPORT_CONSTS]);
 eval 'require File::Format::RIFF';
 if ($@) {
@@ -1073,6 +1071,21 @@ sub gravis2file { my $file = shift;
 		if (! $bytes) { return 0; }   # pat2bytes has already warned
 		if (! open(F, '>', $file)) { warn "can't open $file:$!\n"; return 0; }
 		print F $bytes;   close F;
+	} elsif ($file =~ /\.zip/) {   # 1.01
+		eval 'require Archive::Zip'; if ($@) {
+			die "you'll need to install Archive::Zip from www.cpan.org\n";
+		}
+		my $zip = Archive::Zip->new();
+		foreach my $pat_name (@pat_names) {
+			my $bytes = pat2bytes(%{$gravis{$pat_name}});
+			if (0 == length $bytes) { warn "gravis{$pat_name} was empty\n"; }
+			if ($bytes) { my $member = $zip->addString($bytes,$pat_name); }
+		}
+		if ($zip->overwriteAs($file) != 0) {
+			warn "can't write zipfile $file: write error\n"; return 0;
+		}
+	} else {
+		warn "it has to be either a .pat or a .zip file\n"; return 0;
 	}
 	return 1;
 }
@@ -1297,8 +1310,9 @@ and I<EndLoop> points. These features are currently unimplemented.
 =head1 IN-MEMORY SOUNDFONT FORMAT
 
 See:
-  perl examples/sf_list doc/Jeux14.sf2 | less
-  perl examples/sf_list -b 0 -p 17 -l  doc/Jeux14.sf2 | less
+
+ perl examples/sf_list doc/Jeux14.sf2 | less
+ perl examples/sf_list -b 0 -p 17 -l  doc/Jeux14.sf2 | less
 
 I<file2sf($filename)> returns a hash with keys:
 I<ifil>,
@@ -1436,9 +1450,8 @@ I<examples/sf_list> for examples manipulating this data-structure.
 
 Fortunately, there exists authoritative and clear documentation
 of the SoundFont file format:
- http://connect.creativelabs.com/developer/SoundFont/sfspec21.pdf
-
-Unfortunately, it's a fairly hard format to work with :-)
+http://connect.creativelabs.com/developer/SoundFont/sfspec21.pdf
+Unfortunately, it's a fairly hard format to work with...
 
 A SoundFont-2 compatible RIFF file comprises three chunks:
 an INFO-list chunk containing a number of required and optional sub-chunks

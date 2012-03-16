@@ -65,12 +65,13 @@ if ($file_type eq 'sf2') {
 	exit;
 } elsif ($file_type eq 'pat') {
 	my %gr = MIDI::SoundFont::file2gravis($file);
-	my @tasks = sort ('Edit INFO', 'List', 'Write', 'Config', 'Quit');
+	my @tasks = sort ('Edit INFO', 'Edit', 'List', 'Write', 'Config', 'Quit');
 	Term::Clui::set_default("do what with $file ?", 'List');
 	while (1) {
 		my $task = Term::Clui::choose("do what with $file ?", @tasks);
 		if (! $task or $task eq 'Quit')    { last; }
 		if      ($task eq 'Edit INFO')     { gr_edit_info(\%gr);
+		} elsif ($task eq 'Edit')          { deep_edit(\%gr);
 		} elsif ($task eq 'List')          { gr_list(%gr);
 		} elsif ($task eq 'Write')         { gr_write(%gr);
 		} elsif ($task eq 'Config')        { config(%gr);
@@ -80,13 +81,14 @@ if ($file_type eq 'sf2') {
 	exit;
 } elsif ($file_type eq 'zip') {
 	my %gr = MIDI::SoundFont::file2gravis($file);
-	my @tasks = sort ( 'Edit INFO', 'Import sf2', 'Import wav',
+	my @tasks = sort ( 'Edit INFO', 'Edit', 'Import sf2', 'Import wav',
 	  'List', 'Delete patch', 'Write', 'Config', 'Quit');
 	while (1) {
 		my $task = Term::Clui::choose("do what with $file ?", @tasks);
 		if (! $task or $task eq 'Quit')    { last; }
 		if      ($task eq 'Edit INFO')     { gr_edit_info(\%gr);
-		} elsif ($task eq 'Import sf2') {
+		} elsif ($task eq 'Edit')          { deep_edit(\%gr);
+		} elsif ($task eq 'Import sf2')    {
 		} elsif ($task eq 'Import wav')    {
 		} elsif ($task eq 'List')          { gr_list(%gr);
 		} elsif ($task eq 'Delete patch')  { gr_delete_patch(%gr);
@@ -114,6 +116,42 @@ sub filetype { my $f = $_[$[];
 	if ($f =~ /.zip$/) { return 'zip'; }
 	if ($f =~ /.pat$/) { return 'pat'; }
 	return '';
+}
+
+sub deep_edit { my $arg = $_[$[];
+	my $type = ref $arg;
+	if (! $type) {
+		return Term::Clui::ask(' new value ?', $arg);
+	} elsif ($type eq 'HASH') {
+		while (1) {
+			my @keys = sort keys %{$arg};
+			my $key = Term::Clui::choose(' edit which ?',
+			  @keys,'Add a new key','Delete a key');
+			if (! $key) { last; }
+			if ($key eq 'Add a new key') {
+			} elsif ($key eq 'Delete a key') {
+			} elsif (! ref $arg->{$key}) {  # it contains a scalar
+				my $new = Term::Clui::ask(' new value ?', $arg->{$key});
+				$arg->{$key} = $new;
+			} else { deep_edit($arg->{$key});
+			}
+		}
+	} elsif ($type eq 'ARRAY') {
+		while (1) {
+			my @args = @{$arg};
+			my @keys = $[ .. $#args;
+			my $key = Term::Clui::choose(' edit which list item ?',
+			  @keys,'Add a new key','Delete a key');
+			if (! length $key) { last; }
+			if ($key eq 'Add a new item') {
+			} elsif ($key eq 'Delete a item') {
+			} elsif (! ref $args[$key]) {  # it contains a scalar
+				my $new = Term::Clui::ask(' new value ?', $args[$key]);
+				$args[$key] = $new;
+			} else { deep_edit($args[$key]);
+			}
+		}
+	}
 }
 
 # ------------------- soundfont functionality -------------------
@@ -197,6 +235,15 @@ sub sf_write { my %sf = @_;
 }
 
 # --------------------- gravis functionality -------------------
+
+sub gr_edit_info { my %gr = @_;
+	my $info_field = Term::Clui::choose(' edit which field ?',
+	  qw(description filename manufacturer));
+	if (! $info_field) { return; }
+	Term::Clui::inform(" current value = $gr->{$info_field}");
+	my $new_value = Term::Clui::ask(' new value ?',$gr->{$info_field});
+	if ($new_value) { $gr->{$info_field} = $new_value; }
+}
 
 sub gr_write { my %gr = @_;
 	my $file = Term::Clui::ask_filename(" write to which file ?");
