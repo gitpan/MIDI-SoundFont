@@ -1,2 +1,3 @@
+20120318 1.02 detect duplicate Preset, Inst & Sample names and uniquely rename
 20120316 1.01 gravis2file writes .zip files
 20120314 1.00 basic translation to and from .sf2 .pat and .zip file formats

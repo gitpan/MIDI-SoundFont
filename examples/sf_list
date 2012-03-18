@@ -49,8 +49,13 @@ if ($file_type eq 'sf2') {
 	my %sf = MIDI::SoundFont::file2sf($File);
 
 	if (! @Patches and ! @Banks) {
-		print "$sf{'INAM'}\n$sf{'IENG'}\n";
-		if ($sf{'ICRD'}) { print "$sf{'ICRD'}\n"; }
+		if ($Config) {
+			print "# $sf{'INAM'}\n# $sf{'IENG'}\n";
+			if ($sf{'ICRD'}) { print "# $sf{'ICRD'}\n"; }
+		} else {
+			print "$sf{'INAM'}\n$sf{'IENG'}\n";
+			if ($sf{'ICRD'}) { print "$sf{'ICRD'}\n"; }
+		}
 	}
 	my @phdr_list = @{$sf{'phdr'}};
 	my %inst_hash = %{$sf{'inst'}};
@@ -116,7 +121,7 @@ if ($file_type eq 'sf2') {
 } elsif (($file_type eq 'pat') || (($file_type eq 'zip') && $Long)) {
 	my %gravis = MIDI::SoundFont::file2gravis($File);
 	if ($Config) { print config($File, %gravis); exit 0; }
-	foreach my $filename (sort keys %gravis) {
+	foreach my $filename (keys %gravis) {
 		foreach my $i (@{$gravis{$filename}{'instruments'}}) {
 			foreach my $l (@{$i->{'layers'}}) {
 				foreach my $w (@{$l->{'wavsamples'}}) {
@@ -125,29 +130,30 @@ if ($file_type eq 'sf2') {
 			}
 		}
 	}
-	foreach my $filename (sort keys %gravis) {
-		print "\n# $filename\n";
-		my %patch = %{$gravis{$filename}};
-		# foreach my $k (sort keys %patch) {
-		foreach my $k (qw(description manufacturer
-		  num_channels num_voices instruments)) {
-			if (! ref $patch{$k}) { print "$k = $patch{$k}\n"; next; }
-			if ('ARRAY' eq ref $patch{$k}) {
-				print "$k = ".Data::Dumper::Dumper(@{$patch{$k}});
-			} elsif ('HASH' eq ref $patch{$k}) {
-				if ($patch{$k}{'layers'}) {
-					foreach my $l (@{$patch{'layers'}}) {
-						foreach my $w (@{$l->{'wavsamples'}}) {
-							$w->{'data'} = ' ... ';
-						}
-					}
-				}
-				print "$k = ".Data::Dumper::Dumper(%{$patch{$k}});
-			} else {
-				print "$k = ".$patch{$k}."\n";
-			}
-		}
-	}
+	print Data::Dumper::Dumper(\%gravis);  # could strip off outer {} and '^  '
+#	foreach my $filename (sort keys %gravis) {
+#		print "\n# $filename\n";
+#		my %patch = %{$gravis{$filename}};
+#		# foreach my $k (sort keys %patch) {
+#		foreach my $k (qw(description manufacturer
+#		  num_channels num_voices instruments)) {
+#			if (! ref $patch{$k}) { print "$k = $patch{$k}\n"; next; }
+#			if ('ARRAY' eq ref $patch{$k}) {
+#				print "$k = ".Data::Dumper::Dumper(@{$patch{$k}});
+#			} elsif ('HASH' eq ref $patch{$k}) {
+#				if ($patch{$k}{'layers'}) {
+#					foreach my $l (@{$patch{'layers'}}) {
+#						foreach my $w (@{$l->{'wavsamples'}}) {
+#							$w->{'data'} = ' ... ';
+#						}
+#					}
+#				}
+#				print "$k = ".Data::Dumper::Dumper(%{$patch{$k}});
+#			} else {
+#				print "$k = ".$patch{$k}."\n";
+#			}
+#		}
+#	}
 } elsif ($file_type eq 'zip') {
 	# Don't bother using array to preserve zip order,
 	# alphabetic is best for finding things.

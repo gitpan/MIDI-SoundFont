@@ -11,7 +11,8 @@ package MIDI::SoundFont;
 no strict;
 use bytes;
 #my $debug = 1; use Data::Dumper;
-$VERSION = '1.01';
+$VERSION = '1.02';
+# 20120318 1.02 detect duplicate Preset,Inst,Sample names and uniquely rename
 # 20120216 1.01 gravis2file writes .zip files
 # 20120215 1.00 first released version
 
@@ -172,11 +173,18 @@ sub bytes2sf { my $bytes = $_[0];   # take it apart with RIFF
 	}
 	my $ind = 0;  # $[ must be zero
 	my @phdr_list = ();
+	my %preset_names_seen = ();   # 1.02
 	while ($ind < $len) {  # sfspec21.txt 7.2
 		my $phdr_rec = substr $pdta{'phdr'}, $ind, 38;
 		my ($achPresetName,$wPreset,$wBank,$wPresetBagNdx,$dwLibrary,
 		 $dwGenre,$dwMorphology) = unpack 'A20SSSLLL', $phdr_rec;
 		$achPresetName =~ s/\0.*$//s;
+		# 1.02 detect duplicate names and rename as necessary (7.2)
+		my $orig = $achPresetName;
+		my $x = 2; while ($preset_names_seen{$achPresetName}) {
+			$achPresetName = $orig."_$x"; $x += 1;
+		}
+		$preset_names_seen{$achPresetName} = 1;
 		push @phdr_list, {
 			achPresetName => $achPresetName,
 			wPreset => $wPreset,
@@ -234,11 +242,17 @@ sub bytes2sf { my $bytes = $_[0];   # take it apart with RIFF
 	}
 	$ind = 0;  # $[ _must_ be zero
 	my @inst_list = ();
+	my %inst_names_seen = ();   # 1.02
 	while ($ind < $len) {  # sfspec21.html#7.6
 		my $inst_rec = substr $pdta{'inst'}, $ind, 22;
 		my ($achInstName,$wInstBagNdx) = unpack 'A20S', $inst_rec;
 		$achInstName =~ s/\0.*$//s;
-		# XXX should detect duplicate names and rename as necessary (7.6)
+		# 1.02 detect duplicate names and rename as necessary (7.6)
+		my $orig = $achInstName;
+		my $x = 2; while ($inst_names_seen{$achInstName}) {
+			$achInstName = $orig."_$x"; $x += 1;
+		}
+		$inst_names_seen{$achInstName} = 1;
 		push @inst_list, {
 			achInstName => $achInstName,
 			wInstBagNdx => $wInstBagNdx,
@@ -301,17 +315,23 @@ sub bytes2sf { my $bytes = $_[0];   # take it apart with RIFF
 	}
 	$ind = 0;
 	my @shdr_list = ();
+	my %sample_names_seen = ();   # 1.02
 	while ($ind < $len) {  # sfspec21.html#7.10
 		my $shdr_rec = substr $pdta{'shdr'}, $ind, 46;
         my ($achSampleName,$dwStart,$dwEnd,$dwStartloop,$dwEndloop,
 		 $dwSampleRate,$byOriginalKey,$chCorrection,$wSampleLink,$sfSampleType)
           = unpack 'A20LLLLLCCSS', $shdr_rec;
 		$achSampleName =~ s/\0.*$//s;
+		# 1.02 detect duplicate names and rename as necessary (7.10)
+		my $orig = $achSampleName;
+		my $x = 2; while ($sample_names_seen{$achSampleName}) {
+			$achSampleName = $orig."_$x"; $x += 1;
+		}
+		$sample_names_seen{$achSampleName} = 1;
 		# extract the sample from $smpl_data
 		my $smpl_length = $dwEnd - $dwStart;  # could test
 		my $this_sample = substr($smpl_data,  # 16 bits is 2 bytes
 		 $dwStart+$dwStart, $smpl_length+$smpl_length);
-		# XXX should detect duplicate names and rename as necessary (7.10)
 		if ($achSampleName ne 'EOS') {
 			push @shdr_list, {
 				achSampleName => $achSampleName,
@@ -509,34 +529,6 @@ sub bytes2sf { my $bytes = $_[0];   # take it apart with RIFF
 sub new_sf {
 }
 
-#sub instname2index { my ($sf_ref, $name) = @_;
-#	my %nam2ind = ();
-#	my $index = 0;
-#	foreach my $inst (@{$sf_ref->{'inst'}}) { # could detect duplicates
-#		$nam2ind{$inst->{'achInstName'}} = $index;
-#		$index += 1;
-#	}
-#	if (wantarray) { return %nam2ind; } else { return $nam2ind{$name}; }
-#}
-#
-#sub samplename2index {
-#	die;
-#	my %sf; my $samplename;
-#	if ((ref $_[0]) eq 'HASH') { %sf = %{$_[0]}; $samplename = $_[1];
-#	} elsif ((scalar @_) % 2) { $samplename = pop @_; %sf = @_;
-#	} else { %sf = @_;
-#	}
-#	my %nam2ind = ();
-#	my $ind = 0;
-#	foreach my $sample (@{$sf{'shdr'}}) { # could detect duplicates
-#		$nam2ind{$sample->{'achSampleName'}} = $ind;
-#		$ind += 1;
-#	}
-#	if ($samplename) { return $nam2ind{$samplename};
-#	} else { return %nam2ind;
-#	}
-#}
-
 sub sf2file { my $file = shift;
 	# write bytes to file, or filehandle (if GLOB), or - is stdout
 	if (! $file) { warn "sf2file: missing arguments.\n"; return; }
@@ -551,18 +543,9 @@ sub sf2file { my $file = shift;
 }
 
 sub sf2bytes{ my %sf = @_;   # put it back together with RIFF
-	# must be careful not to modify %df ! it's full of references !
-
-	# 20120310:
+	# must be careful not to modify %sf ! it's full of references !
 	# using sf_edit to change the banks, and saving to /tmp/k.sf2
 	# timidity -idvv -x 'soundfont /tmp/k.sf2' /tmp/t.mid | less
-	# inst e.g. Tuba is much duplicated, giving 729 ihdr's :-( (82 in original)
-	# parse_layer: too deep instrument level
-	# shdr:
-	# /tmp/k.sf2: illegal list numbers -3566
-	# /tmp/k.sf2: illegal list numbers -36581
-	# and k.sf2 is nearly 10 times bigger than Jeux14.sf2 :-(
-	# So: test.pl should check length of inst, ihdr etc
 
 	my $info = new File::Format::RIFF::List('INFO');
 
@@ -664,8 +647,8 @@ sub sf2bytes{ my %sf = @_;   # put it back together with RIFF
 	$phdr_ck->id('phdr');
 	$phdr_ck->data(join('', @phdr_data));
 
-	# go through @pbag_list moving the generators and modulators out into
-	# their own lists, and noting their Ndx's
+	# go through @pbag_list moving the generators and modulators
+	# out into their own lists, and noting their Ndx's
 	# "the gen and mod lists are in the same order as the phdr and pbag lists"
 	# http://www.pjb.com.au/midi/sfspec21.html#7.3
 	my @pgen_list = ();  # #7.3
