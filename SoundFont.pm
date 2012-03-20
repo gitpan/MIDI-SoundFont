@@ -11,7 +11,8 @@ package MIDI::SoundFont;
 no strict;
 use bytes;
 #my $debug = 1; use Data::Dumper;
-$VERSION = '1.02';
+$VERSION = '1.03';
+# 20120320 1.03 new_sf(), and chCorrection is packed as signed
 # 20120318 1.02 detect duplicate Preset,Inst,Sample names and uniquely rename
 # 20120216 1.01 gravis2file writes .zip files
 # 20120215 1.00 first released version
@@ -21,8 +22,9 @@ require DynaLoader;
 @ISA = qw(Exporter DynaLoader);
 @EXPORT = ();
 @EXPORT_OK = qw(
- GeneratorOperators genAmountType 
- bytes2sf file2sf sf2bytes sf2file file2gravis gravis2file timidity_cfg
+  GeneratorOperators genAmountType 
+  bytes2sf file2sf sf2bytes sf2file new_sf
+  file2gravis gravis2file timidity_cfg
 );
 @EXPORT_CONSTS = qw(GeneratorOperators genAmountType);
 %EXPORT_TAGS = (ALL => [@EXPORT,@EXPORT_OK], CONSTS => [@EXPORT_CONSTS]);
@@ -320,7 +322,7 @@ sub bytes2sf { my $bytes = $_[0];   # take it apart with RIFF
 		my $shdr_rec = substr $pdta{'shdr'}, $ind, 46;
         my ($achSampleName,$dwStart,$dwEnd,$dwStartloop,$dwEndloop,
 		 $dwSampleRate,$byOriginalKey,$chCorrection,$wSampleLink,$sfSampleType)
-          = unpack 'A20LLLLLCCSS', $shdr_rec;
+          = unpack 'A20LLLLLCcSS', $shdr_rec;
 		$achSampleName =~ s/\0.*$//s;
 		# 1.02 detect duplicate names and rename as necessary (7.10)
 		my $orig = $achSampleName;
@@ -408,8 +410,8 @@ sub bytes2sf { my $bytes = $_[0];   # take it apart with RIFF
 			warn "sfGenOper=$sfGenOper out of range\n"; return;
 		}
 		if ($OnlyValidInInstr{$sfGenOper}) {
-			warn "sfGenOper=$sfGenOper ($GeneratorOperators[$sfGenOper]) "
-			  . "invalid in presets; ignoring\n";
+			#warn "sfGenOper=$sfGenOper ($GeneratorOperators[$sfGenOper]) "
+			#  . "invalid in presets; ignoring\n";
 			# invalid in presets; ignore!  see sfspec21.html#8.5
 		} elsif ($sfGenOper == 41) {  # extract the instrument
 			my ($dummy,$shAmount) = unpack "SS", $pgen_rec;
@@ -526,7 +528,72 @@ sub bytes2sf { my $bytes = $_[0];   # take it apart with RIFF
 	return %sf;
 }
 
-sub new_sf {
+sub new_sf { my $inam = $_[$[] || 'Name of this SoundFont';
+	my ($name,$passwd,$uid,$gid, $quota,$comment,$gcos,$dir,$shell,$expire)
+	  = getpwuid($>);
+	$gcos =~ s/,+$//;
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime;
+	my $y = sprintf ("%4.4d", $year+1900);
+	my @abbr = qw( January February March April May June
+	  July August September October November December );
+	my $now = "$abbr[$mon] $mday, $y";   # sfspec21.html#5.6
+	return (
+		ICMT => "insert comment here",
+		ICOP => "Copyright (c) $y $gcos; may be freely copied and modified",
+		ICRD => $now,
+		IENG => "$name, $gcos",
+		INAM => $inam,
+		IPRD => 'TiMidity',
+		ISFT => "MIDI-SoundFont $VERSION",
+		IVER => '',
+		ifil => '2.1',
+		inst => {
+			inst_0 => {
+				ibags => [
+					{
+						generators => {
+							keyRange => [ 0, 127 ],
+							pan => -190,
+							sampleID => 'smpl_0',
+							sampleModes => 1,
+						},
+						modulators => [],
+        			},
+
+				],
+			},
+		},
+		phdr => [
+			{
+				achPresetName => 'Instrument number 0',
+				pbags => [
+					{
+						generators => {
+							velRange => [ 0, 127 ],
+							instrument => 'inst_0',
+						},
+						modulators => [],
+					},
+				],
+				wBank => 0,
+				wPreset => 0,
+			},
+		],
+		shdr => {
+			inst_0 => {
+				byOriginalKey => 69,
+				chCorrection => 0,
+				dwEnd => 10000,
+				dwEndloop => 9990,
+				dwSampleRate => 44100,
+				dwStart => 0,
+				dwStartloop => 9890,
+				sampledata => ' ... ',
+				sfSampleType => 1,
+				wSampleLink => 0,
+			},
+		},
+	);
 }
 
 sub sf2file { my $file = shift;
@@ -796,7 +863,7 @@ sub sf2bytes{ my %sf = @_;   # put it back together with RIFF
 		my $start;
 		$start = (length $samples)/2;
 		$samples .= $shdr->{'sampledata'} . "\0"x92;
-		push @shdr_data, pack 'A20LLLLLCCSS', $samplename,
+		push @shdr_data, pack 'A20LLLLLCcSS', $samplename,
 		  $start, $start+$smpl_length, $start+$to_startloop,
 		  $start+$to_endloop, $shdr->{'dwSampleRate'},
 	 	  $shdr->{'byOriginalKey'}, $shdr->{'chCorrection'},
@@ -876,6 +943,23 @@ sub gen_hashref2list { my ($gen_hashref, $is_p_or_i) = @_;
 	if ($last_item) { push @gen_list, $last_item; }
 	return @gen_list;
 }
+
+sub raw2shdr { my ($achSampleName,$byOriginalKey,$dwSampleRate,$sampledata)=@_;
+	return ($achSampleName => {  # 1.03
+      byOriginalKey => $byOriginalKey,
+      chCorrection => $chCorrection,
+      dwEnd => $dwEnd,
+      dwEndloop => $dwEndloop,
+      dwSampleRate => $dwSampleRate,
+      dwStart => 0,
+      dwStartloop => $dwStartloop,
+      sampledata => $sampledata,
+      sfSampleType => 1,
+      wSampleLink => 0
+	});
+}
+
+# --------------------------- gravis routines -----------------------
 
 sub file2gravis { my $file = $_[0];
 	my $file_type = filetype($file);
@@ -1300,18 +1384,18 @@ See:
 I<file2sf($filename)> returns a hash with keys:
 I<ifil>,
 I<isng>,
-I<inam>,
+I<INAM>,
 I<irom>,
 I<iver>,
-I<icrd>,
-I<ieng>,
-I<iprd>,
-I<icop>,
-I<icmt> and
-I<isft>
+I<ICRD>,
+I<IENG>,
+I<IPRD>,
+I<ICOP>,
+I<ICMT> and
+I<ISFT>
 which have scalar values
 (see http://www.pjb.com.au/midi/sfspec21.html#i5
-but here standardised to lower-case), and the keys:
+), and the keys:
 I<phdr>
 whose value is an arrayref, and
 I<inst> and
@@ -1464,7 +1548,6 @@ In the I<wavsample> section, I<low_freq> and I<high_freq> seem large
 (perhaps in hundreths of Hz?). I would have expected a MIDI pitch there,
 like low=48 high=72, corresponding to the SoundFont I<key range> parameter,
 allowing different wavsamples to be used for different tessituras.
-The number 12288.0 in TiMidity's I<doc/timidity/playmidi.c> may hold a clue.
 See:
   perl examples/sf_list gravis/fiddle.pat | less
 
@@ -1473,7 +1556,7 @@ See:
 
 =over 3
 
-=item file2sf($filename)
+=item %sf = file2sf($filename)
 
 Reads the file, which should be a SoundFont file, and converts it
 to the data-structure documented above in the
@@ -1490,7 +1573,16 @@ section into a file as documented in the
 SOUNDFONT FILE-FORMAT
 section.
 
-=item file2gravis($filename)
+=item %sf = new_sf($inam)
+
+Returns a minimal empty soundfont data-structure as documented above in the
+IN-MEMORY SOUNDFONT FORMAT section.
+The optional argument I<$inam> sets the 'INAM' value.
+You can then change I<$sf{'INAM'}> and I<$sf{'phdr'}[0]{'wPreset'}>
+or push onto I<@{$sf{'phdr'}}> and so on.
+See I<examples/make_bank5> in the I<examples/> directory.
+
+=item %gr = file2gravis($filename)
 
 Reads the file, which should be either a Gravis B<.pat> patch-file,
 or a B<.zip> archive of patch-files, and converts it to the
@@ -1524,7 +1616,7 @@ is used to guess some General-Midi-conformant patch-numbers.
 
 =head1 EXAMPLES
 
-Two simple examples in the I<examples/> subdirectory
+Three simple examples in the I<examples/> subdirectory
 are already useful applications:
 
 =over 3
@@ -1545,6 +1637,11 @@ and a B<-c> option to suggest a paragraph for your I<timidity.cfg>
 
 I<sf_edit> is a I<Term::Clui> application which allows certain simple
 operations such as moving Banks, deleting Patches.
+
+=item make_bank5
+
+I<make_bank5> puts together a I<SoundFont> file from scratch,
+using some simple waveforms.
 
 =back
 

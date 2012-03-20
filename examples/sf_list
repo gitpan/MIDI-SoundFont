@@ -177,14 +177,13 @@ exit;
 
 sub filetype { my $f = $_[$[];
 	if (! open(F, $f)) { die "can't open $f: $!\n"; }
-	read F, my $s, 12;
-	close F;
+	read F, my $s, 12;   close F;
 	if ($s =~ /^RIFF....sfbk/) { return 'sf2'; }
-	if ($s =~ /^PK/) { return 'zip'; }
+	if ($s =~ /^PK/)       { return 'zip'; }
 	if ($s =~ /^GF1PATCH/) { return 'pat'; }
-	if ($f =~ /.sf2$/) { return 'sf2'; }
-	if ($f =~ /.zip$/) { return 'zip'; }
-	if ($f =~ /.pat$/) { return 'pat'; }
+	if ($f =~ /.sf2$/i)    { return 'sf2'; }
+	if ($f =~ /.zip$/i)    { return 'zip'; }
+	if ($f =~ /.pat$/i)    { return 'pat'; }
 	return '';
 }
 

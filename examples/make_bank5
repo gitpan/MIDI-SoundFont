@@ -1,0 +1,221 @@
+#! /usr/bin/perl
+#########################################################################
+#        This Perl script is Copyright (c) 2012, Peter J Billam         #
+#                          www.pjb.com.au                               #
+#                                                                       #
+#     This script is free software; you can redistribute it and/or      #
+#            modify it under the same terms as Perl itself.             #
+#########################################################################
+use MIDI::SoundFont;
+my $Version       = '1.0';
+my $VersionDate   = '19mar2012';
+use bytes;
+
+use Data::Dumper(Dumper);
+$Data::Dumper::Indent = 1;  $Data::Dumper::Sortkeys = 1;
+
+my $OutputFile = '/tmp/Bank5.sf2';
+if (-d '/home/pjb/www/midi/free') {
+	$OutputFile = '/home/pjb/www/midi/free/Bank5.sf2';
+}
+while ($ARGV[$[] =~ /^-([a-z])/) {
+	if ($1 eq 'v')      { shift;
+		my $n = $0; $n =~ s{^.*/([^/]+)$}{$1};
+		print "$n version $Version $VersionDate\n";
+		exit 0;
+	} elsif ($1 eq 'c') { suggest_cfg(); shift;
+	} elsif ($1 eq 'o') { shift; $OutputFile = shift;
+	} else {
+		print "usage:\n";  my $synopsis = 0;
+		while (<DATA>) {
+			if (/^=head1 SYNOPSIS/)     { $synopsis = 1; next; }
+			if ($synopsis && /^=head1/) { last; }
+			if ($synopsis && /\S/)      { s/^\s*/   /; print $_; next; }
+		}
+		exit 0;
+	}
+}
+
+my %sf = MIDI::SoundFont::new_sf();
+$sf{'INAM'} = 'Bank 5 - some simple synthy sounds';
+$sf{'phdr'}[0]{'wBank'} = 5;
+
+$sf{'phdr'}[0]{'achPresetName'} = 'SawtoothToTriangle';
+my %smpl_0 = sawtooth2triangle();
+$sf{'shdr'}{'smpl_0'} = \%smpl_0;
+
+push @{$sf{'phdr'}}, {
+achPresetName => 'SquareToSine',
+  pbags => [
+    {
+      generators => {
+        instrument => 'inst_1', velRange => [0,127]
+      },
+      modulators => []
+    }
+  ],
+  wBank => 5,
+  wPreset => 1
+};
+$sf{'inst'}{'inst_1'} = {
+  ibags => [
+    {
+      generators => {
+        keyRange => [0,127], pan => +190,
+        sampleID => 'smpl_1', sampleModes => 1
+      },
+      modulators => []
+    }
+  ]
+};
+my %smpl_1 = square2sine();
+$sf{'shdr'}{'smpl_1'} = \%smpl_1;
+
+
+MIDI::SoundFont::sf2file($OutputFile,%sf);
+
+# $smpl_0{'sampledata'} = '[ ... ]'; print Dumper(\%smpl_0);
+exit 0;
+
+sub sawtooth2triangle {
+	# 16-bit signed little-endian, starting sawtooth and fading to triangle
+	# A=440 at 44100 samples/sec means 1 cycle = 100.25 samples
+	# so we take 1 cycle = 100 samples and apply chCorrection = -4
+	# Timidity does an artefact on low notes; should perhaps do 220 and 110 too
+	my @samples = ();
+	my $n_cycles = 440;
+	foreach my $i_cycle (1..$n_cycles) {
+		my $rise = round(25*$i_cycle/$n_cycles);
+		my $fall = 100 - $rise - $rise -1;
+		if ($rise > 0) {
+			foreach my $i_up_1st (1..$rise) {
+				push @samples, round(32000*($i_up_1st/$rise));
+			}
+		}
+		foreach my $i_down (0 .. $fall) {
+			push @samples, round(32000 - 64000*($i_down/$fall));
+		}
+		if ($rise > 0) {
+			foreach my $i_up_2nd (1..$rise) {
+				push @samples, round(32000*($i_up_2nd/$rise)-32000);
+			}
+		}
+	}
+	my $sampledata = pack 's<*', @samples;  # 16-bit signed little-endian
+	my $l = length $sampledata; # warn "l=$l\n";
+	return (
+      byOriginalKey => 69,
+      chCorrection => -4,
+      dwEnd => 100*$n_cycles,
+      dwEndloop => 100*($n_cycles-1),
+      dwSampleRate => 44100,
+      dwStart => 0,
+      dwStartloop => 100*($n_cycles-3),
+      sampledata => $sampledata,
+      sfSampleType => 1,
+      wSampleLink => 0
+	);
+}
+
+sub square2sine {
+	# 16-bit signed little-endian, starting square and fading to sine
+	# A=440 at 44100 samples/sec means 1 cycle = 100.25 samples
+	# so we take 1 cycle = 100 samples and apply chCorrection = -4
+	my @samples = ();
+	my $n_cycles = 440;
+	my $twopi_over100 = 2.0 * 3.141592653589 / 100;
+	foreach my $i_cycle (1..$n_cycles) {
+		my $fade = $i_cycle/$n_cycles;  $fade = $fade*$fade;
+		push @samples, 0;
+		foreach my $i (1..49) {
+			push @samples, 32000*((1.0-$fade) + $fade*sin($twopi_over100*$i));
+		}
+		push @samples, 0;
+		foreach my $i (51..99) {
+			push @samples, 32000*(($fade-1.0) + $fade*sin($twopi_over100*$i));
+		}
+	}
+	push @samples, 0;
+	my $sampledata = pack 's<*', @samples;  # 16-bit signed little-endian
+	my $l = length $sampledata;
+	return (
+      byOriginalKey => 69,
+      chCorrection => -4,
+      dwEnd => 100*$n_cycles,
+      dwEndloop => 100*($n_cycles-1),
+      dwSampleRate => 44100,
+      dwStart => 0,
+      dwStartloop => 100*($n_cycles-3),
+      sampledata => $sampledata,
+      sfSampleType => 1,
+      wSampleLink => 0
+	);
+}
+
+sub round   { my $x = $_[$[];
+	if ($x > 0.0) { return int ($x + 0.5); }
+	if ($x < 0.0) { return int ($x - 0.5); }
+	return 0;
+}
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+make_bank5 - Creates a synthy SoundFont, as demo for MIDI::SoundFont
+
+=head1 SYNOPSIS
+
+ make_bank5            # the default output-file is /tmp/Bank5.sf2
+ make_bank5 -o /home/soundfonts/Bank5.sf2
+ make_bank5 -c -o /home/soundfonts/Bank5.sf2  # suggests timidity.cfg
+ perldoc make_bank5    # read the manual :-)
+
+=head1 DESCRIPTION
+
+This script creates a I<SoundFont> file from scratch, using
+some simple waveforms.  It is one of the example scripts
+that comes with the I<MIDI::SoundFont> CPAN module.
+
+=head1 OPTIONS
+
+=over 3
+
+=item I<-o /home/soundfonts/Bank5.sf2>
+
+Sets the output filename, to I</home/soundfonts/Bank5.sf2> in this example.
+The default is I</tmp/Bank5.sf2>
+
+=item I<-c>
+
+Also prints to I<STDOUT> a suggested paragraph for your I<timidity.cfg> file
+
+=item I<-v>
+
+Prints version number.
+
+=back
+
+=head1 CHANGES
+
+ 20120319  1.0  first working version
+
+=head1 AUTHOR
+
+Peter J Billam   http://www.pjb.com.au/comp/contact.html
+
+=head1 CREDITS
+
+Based on the MIDI::SoundFont CPAN module.
+
+=head1 SEE ALSO
+
+ http://search.cpan.org/perldoc?MIDI::SoundFont
+ http://www.pjb.com.au/midi/
+ man timidity.cfg
+
+=cut
+

@@ -1028,15 +1028,15 @@ the twelve bytes representing "May 1, 1995" as eleven ASCII characters
 followed by a zero byte.
 </P><P>
 Conventionally, the format of the string is "Month Day, Year" where Month
-is initially capitalized and isthe conventional full English spelling
+is initially capitalized and is the conventional full English spelling
 of the month, Day is the date in decimal followed by a comma, and
 Year is the full decimal year.  Thus the field should conventionally
 never be longer than 32 bytes.
 The ICRD string is provided for library management purposes.
 If the ICRD sub-chunk is missing, not terminated in a zero valued byte,
 or for some reason incapable of being faithfully copied as an ASCII string,
-the field should be ignored and if re-written, should not be
-copied.  If the field's contents are not seemingly meaningful but can
+the field should be ignored and if re-written, should not be copied.
+If the field's contents are not seemingly meaningful but can
 faithfully reproduced, this should be done.
 </P><A NAME="5.7"></A><P>
 <B>5.7  The IENG Sub-chunk</B>
@@ -1048,7 +1048,7 @@ A typical IENG field would be the twelve bytes representing
 "Tim Swartz" as ten ASCII characters followed by two zero bytes.
 The IENG string is provided for library management purposes.
 If the IENG sub-chunk is missing, not terminated in a zero valued byte,
-or for some reason incapable ofbeing faithfully copied as an ASCII string,
+or for some reason incapable of being faithfully copied as an ASCII string,
 the field should be ignored and if re-written, should not be copied.
 If the field's contents are not seemingly meaningful but can
 faithfully reproduced, this should be done.
@@ -1077,7 +1077,7 @@ The ICOP sub-chunk is an optional sub-chunk containing any copyright
 assertion string associated withthe SoundFont compatible bank.
 It contains an ASCII string of 256 or fewer bytes including one or two
 terminators of value zero, so as to make the total byte count even.
-A typical ICOP field would be the 40bytes representing "Copyright (c)
+A typical ICOP field would be the 40 bytes representing "Copyright (c)
 1995 E-mu Systems, Inc." as 38 ASCII characters followed by two
 zero bytes.
 The ICOP string is provided for intellectual property protection and
@@ -1296,7 +1296,7 @@ If a zone other than the first zone lacks an Instrument generator as
 its last generator, that zone should be ignored.
 A global zone with no modulators and no generators should also be ignored.
 If the PBAG sub-chunk is missing, or its size is not a multiple of
-four bytes, the file should be rejected asstructurally unsound.
+four bytes, the file should be rejected as structurally unsound.
 </P><A NAME="7.4"></A><P>
 <B>7.4  The PMOD Sub-chunk</B>
 The PMOD sub-chunk is a required sub-chunk listing all preset zone
@@ -1669,7 +1669,7 @@ The values of dwStart, dwEnd, dwStartloop, and dwEndloop must all be
 within the range of the sampledata field included in the SoundFont
 compatible bank or referenced in the sound ROM.  Also, to allow a
 variety of hardware platforms to be able to reproduce the data, the
-samples have a minimum length of 48data points, a minimum loop size of
+samples have a minimum length of 48 data points, a minimum loop size of
 32 data points and a minimum of 8 valid points prior to dwStartloop
 and after dwEndloop.  Thus dwStart must be less than dwStartloop-7,
 dwStartloop must be less than dwEndloop-31, and dwEndloop must be

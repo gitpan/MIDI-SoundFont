@@ -7,6 +7,7 @@ test.pl
 SoundFont.pm
 examples/sf_list
 examples/sf_edit
+examples/make_bank5
 gravis/fiddle.pat
 gravis/gravis.cfg
 gravis/Gravis.zip

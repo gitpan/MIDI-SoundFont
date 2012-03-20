@@ -11,9 +11,11 @@ use MIDI::SoundFont();
 eval 'require Term::Clui'; if ($@) {
 	die "you'll need to install the Term::Clui module from www.cpan.org\n";
 }
-my $Version       = '1.0';
-my $VersionDate   = '24feb2012';
+use Data::Dumper(Dumper);
+$Data::Dumper::Indent = 1;  $Data::Dumper::Sortkeys = 1;
 use bytes;
+my $Version       = '1.03';
+my $VersionDate   = '19mar2012';
 
 my @Banks = ();
 while ($ARGV[$[] =~ /^-([a-z])/) {
@@ -41,7 +43,7 @@ if ($file_type eq 'sf2') {
 	my %sf = MIDI::SoundFont::file2sf($file);
 	print "$sf{'INAM'}\n$sf{'IENG'}\n";
 	if ($sf{'ICRD'}) { print "$sf{'ICRD'}\n"; }
-	my @tasks = sort ('Move bank', 'Move patch', 'Copy patch',
+	my @tasks = sort ('Move bank', 'Move patch', 'Copy patch', 'Edit',
 	   'Edit INFO', 'Import gravis', 'Import wav', 'List', 'Delete bank',
 	   'Delete patch', 'Write', 'Config', 'Quit');
 	Term::Clui::set_default("do what with $file ?", 'List');
@@ -51,6 +53,7 @@ if ($file_type eq 'sf2') {
 		if ($task eq 'Move bank')          { sf_move_bank(%sf);
 		} elsif ($task eq 'Move patch')    {
 		} elsif ($task eq 'Copy patch')    {
+		} elsif ($task eq 'Edit')          { sf_edit_dump(\%sf);
 		} elsif ($task eq 'Edit INFO')     { sf_edit_info(\%sf);
 		} elsif ($task eq 'Import gravis') {
 		} elsif ($task eq 'Import wav')    {
@@ -170,6 +173,23 @@ sub sf_banks { my %sf = @_;
 	return sort {$a <=> $b} keys %banks;
 }
 
+sub sf_edit_dump { my $sf_ref = $_[$[];
+	my @text = split "\n", Dumper($sf_ref);
+	my %new_sf = ();
+	$text[$[] = '%new_sf = (';
+	$text[$#text] = ");\n";
+	while (1) {
+		# must delete all the sampledata = ... lines !
+		eval Term::Clui::edit('SoundFont', join("\n",@text));
+		if (! $@) { last ; }
+		if (! Term::Clui::confirm(" syntax error. OK to re-edit ?")) {return;}
+	}
+	if (Term::Clui::confirm(" OK to replace the SoundFont ?")) {
+		%{$sf_ref} = %new_sf;
+	}
+	return;
+}
+
 sub sf_edit_info { my $sf_ref = $_[0];
 	my @tasks = ('ICMT', 'ICOP', 'IENG', 'INAM');
 	while (1) {
@@ -191,6 +211,7 @@ sub sf_unused_banks { my %sf = @_;
 	foreach my $used (sf_banks(%sf)) { delete $banks{$used}; }
 	return sort {$a <=> $b} keys %banks;
 }
+
 
 sub sf_list { my %sf = @_;
 	my @phdr_list = @{$sf{'phdr'}};
