@@ -14,8 +14,8 @@ eval 'require Term::Clui'; if ($@) {
 use Data::Dumper(Dumper);
 $Data::Dumper::Indent = 1;  $Data::Dumper::Sortkeys = 1;
 use bytes;
-my $Version       = '1.03';
-my $VersionDate   = '19mar2012';
+my $Version       = $MIDI::SoundFont::VERSION;
+my $VersionDate   = $MIDI::SoundFont::VERSION_DATE;
 
 my @Banks = ();
 while ($ARGV[$[] =~ /^-([a-z])/) {

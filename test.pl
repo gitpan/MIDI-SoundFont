@@ -14,7 +14,7 @@ $Data::Dumper::Indent = 1;
 $Data::Dumper::Quotekeys = 0;
 $Data::Dumper::Sortkeys = 1;
 $Data::Dumper::Terse = 1;
-use Test::Simple tests => 43;
+use Test::Simple tests => 42;
 # use Class::MakeMethods::Utility::Ref qw( ref_clone ref_compare );
 use bytes;
 
@@ -109,8 +109,6 @@ my %gravis_pat = MIDI::SoundFont::file2gravis($pat_file);
 foreach (sort keys %gravis_pat) { print "# key is $_\n"; }
 my %pat1 = %{$gravis_pat{'fiddle.pat'}};
 ok($pat1{'filename'} eq $pat_file, "filename is $pat_file");
-ok($pat1{'instruments'}->[0]->{'instr_size'} == 12117,
-  "first instr_size is 12117");
 my @wavsamples1=@{$pat1{'instruments'}->[0]->{'layers'}->[0]->{'wavsamples'}};
 ok(scalar(@wavsamples1) == 3, "there are 3 wavsamples");
 ok(length($wavsamples1[0]->{'data'}) == 5018,

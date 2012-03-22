@@ -1,3 +1,5 @@
+20120322 1.04 pack a=zeropadded rather than A=spacepadded; introduce
+              new_gf(), gravis2file now works, and make_bank5 does gravis too
 20120320 1.03 new_sf(), and chCorrection is packed as signed
 20120318 1.02 detect duplicate Preset, Inst & Sample names and uniquely rename
 20120316 1.01 gravis2file writes .zip files

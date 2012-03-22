@@ -7,24 +7,24 @@
 #            modify it under the same terms as Perl itself.             #
 #########################################################################
 use MIDI::SoundFont;
-my $Version       = '1.0';
-my $VersionDate   = '19mar2012';
+my $Version       = $MIDI::SoundFont::VERSION;
+my $VersionDate   = $MIDI::SoundFont::VERSION_DATE;
 use bytes;
+
+# see ~/csound/make_txts for the rabbit and mt sequences !
 
 use Data::Dumper(Dumper);
 $Data::Dumper::Indent = 1;  $Data::Dumper::Sortkeys = 1;
 
-my $OutputFile = '/tmp/Bank5.sf2';
-if (-d '/home/pjb/www/midi/free') {
-	$OutputFile = '/home/pjb/www/midi/free/Bank5.sf2';
-}
+my $OutputDir = '/tmp';
+if (-d '/home/pjb/www/midi/free') { $OutputDir = '/home/pjb/www/midi/free'; }
 while ($ARGV[$[] =~ /^-([a-z])/) {
 	if ($1 eq 'v')      { shift;
 		my $n = $0; $n =~ s{^.*/([^/]+)$}{$1};
 		print "$n version $Version $VersionDate\n";
 		exit 0;
 	} elsif ($1 eq 'c') { suggest_cfg(); shift;
-	} elsif ($1 eq 'o') { shift; $OutputFile = shift;
+	} elsif ($1 eq 'd') { shift; $OutputDir = shift;
 	} else {
 		print "usage:\n";  my $synopsis = 0;
 		while (<DATA>) {
@@ -36,14 +36,53 @@ while ($ARGV[$[] =~ /^-([a-z])/) {
 	}
 }
 
+# First create the samples...
+# starting sawtooth and fading to triangle
+# A=440 at 44100 samples/sec means 1 cycle = 100.25 samples
+# so we take 1 cycle = 100 samples and apply chCorrection = -4
+my @SawtoothToTriangle = ();
+my $n_cycles = 440;
+foreach my $i_cycle (1..$n_cycles) {
+	my $rise = round(25*$i_cycle/$n_cycles);
+	my $fall = 100 - $rise - $rise -1;
+	if ($rise > 0) {
+		foreach my $i_up_1st (1..$rise) {
+			push @SawtoothToTriangle, round(32000*($i_up_1st/$rise));
+		}
+	}
+	foreach my $i_down (0 .. $fall) {
+		push @SawtoothToTriangle, round(32000 - 64000*($i_down/$fall));
+	}
+	if ($rise > 0) {
+		foreach my $i_up_2nd (1..$rise) {
+			push @SawtoothToTriangle, round(32000*($i_up_2nd/$rise)-32000);
+		}
+	}
+}
+# starting square and fading to sine
+my @SquareToSine = ();
+my $n_cycles = 440;
+my $twopi_over100 = 2.0 * 3.141592653589 / 100;
+foreach my $i_cycle (1..$n_cycles) {
+	my $fade = $i_cycle/$n_cycles;  $fade = $fade*$fade;
+	push @SquareToSine, 0;
+	foreach my $i (1..49) {
+		push @SquareToSine, 32000*((1.0-$fade) + $fade*sin($twopi_over100*$i));
+	}
+	push @SquareToSine, 0;
+	foreach my $i (51..99) {
+		push @SquareToSine, 32000*(($fade-1.0) + $fade*sin($twopi_over100*$i));
+	}
+}
+push @SquareToSine, 0;
+
+# now create the soundfont...
 my %sf = MIDI::SoundFont::new_sf();
 $sf{'INAM'} = 'Bank 5 - some simple synthy sounds';
 $sf{'phdr'}[0]{'wBank'} = 5;
-
 $sf{'phdr'}[0]{'achPresetName'} = 'SawtoothToTriangle';
-my %smpl_0 = sawtooth2triangle();
+my %smpl_0 = sf_sawtooth2triangle();
 $sf{'shdr'}{'smpl_0'} = \%smpl_0;
-
 push @{$sf{'phdr'}}, {
 achPresetName => 'SquareToSine',
   pbags => [
@@ -54,8 +93,7 @@ achPresetName => 'SquareToSine',
       modulators => []
     }
   ],
-  wBank => 5,
-  wPreset => 1
+  wBank => 5, wPreset => 1
 };
 $sf{'inst'}{'inst_1'} = {
   ibags => [
@@ -68,87 +106,106 @@ $sf{'inst'}{'inst_1'} = {
     }
   ]
 };
-my %smpl_1 = square2sine();
+my %smpl_1 = sf_square2sine();
 $sf{'shdr'}{'smpl_1'} = \%smpl_1;
-
-
-MIDI::SoundFont::sf2file($OutputFile,%sf);
-
+MIDI::SoundFont::sf2file("$OutputDir/Bank5.sf2",%sf);
 # $smpl_0{'sampledata'} = '[ ... ]'; print Dumper(\%smpl_0);
+
+# now the gravis patches
+my %pat_1 = MIDI::SoundFont::new_pat();
+$pat_1{'description'} = 'SawtoothToTriangle';
+my %wavsmpl_1 = gr_sawtooth2triangle();
+$pat_1{'instruments'}[0]{'layers'}[0]{'wavsamples'}[0] = \%wavsmpl_1;
+MIDI::SoundFont::gravis2file("$OutputDir/SawtoothToTriangle.pat",
+  ('SawtoothToTriangle.pat' => \%pat_1));
+
+my %pat_2 = MIDI::SoundFont::new_pat();
+$pat_2{'description'} = 'SquareToSine';
+my %wavsmpl_2 = gr_square2sine();
+$pat_2{'instruments'}[0]{'layers'}[0]{'wavsamples'}[0] = \%wavsmpl_2;
+MIDI::SoundFont::gravis2file("$OutputDir/SquareToSine.pat",
+  ('SquareToSine.pat' => \%pat_2));
+
 exit 0;
 
-sub sawtooth2triangle {
-	# 16-bit signed little-endian, starting sawtooth and fading to triangle
-	# A=440 at 44100 samples/sec means 1 cycle = 100.25 samples
-	# so we take 1 cycle = 100 samples and apply chCorrection = -4
+sub sf_sawtooth2triangle {
 	# Timidity does an artefact on low notes; should perhaps do 220 and 110 too
-	my @samples = ();
-	my $n_cycles = 440;
-	foreach my $i_cycle (1..$n_cycles) {
-		my $rise = round(25*$i_cycle/$n_cycles);
-		my $fall = 100 - $rise - $rise -1;
-		if ($rise > 0) {
-			foreach my $i_up_1st (1..$rise) {
-				push @samples, round(32000*($i_up_1st/$rise));
-			}
-		}
-		foreach my $i_down (0 .. $fall) {
-			push @samples, round(32000 - 64000*($i_down/$fall));
-		}
-		if ($rise > 0) {
-			foreach my $i_up_2nd (1..$rise) {
-				push @samples, round(32000*($i_up_2nd/$rise)-32000);
-			}
-		}
-	}
-	my $sampledata = pack 's<*', @samples;  # 16-bit signed little-endian
+	# 16-bit signed little-endian
+	my $sampledata = pack 's<*', @SawtoothToTriangle;
 	my $l = length $sampledata; # warn "l=$l\n";
 	return (
       byOriginalKey => 69,
       chCorrection => -4,
       dwEnd => 100*$n_cycles,
-      dwEndloop => 100*($n_cycles-1),
+      dwEndloop => 100*($n_cycles-1),     # samples, not bytes
       dwSampleRate => 44100,
       dwStart => 0,
-      dwStartloop => 100*($n_cycles-3),
+      dwStartloop => 100*($n_cycles-3),   # samples, not bytes
       sampledata => $sampledata,
       sfSampleType => 1,
       wSampleLink => 0
 	);
 }
 
-sub square2sine {
-	# 16-bit signed little-endian, starting square and fading to sine
-	# A=440 at 44100 samples/sec means 1 cycle = 100.25 samples
-	# so we take 1 cycle = 100 samples and apply chCorrection = -4
-	my @samples = ();
-	my $n_cycles = 440;
-	my $twopi_over100 = 2.0 * 3.141592653589 / 100;
-	foreach my $i_cycle (1..$n_cycles) {
-		my $fade = $i_cycle/$n_cycles;  $fade = $fade*$fade;
-		push @samples, 0;
-		foreach my $i (1..49) {
-			push @samples, 32000*((1.0-$fade) + $fade*sin($twopi_over100*$i));
-		}
-		push @samples, 0;
-		foreach my $i (51..99) {
-			push @samples, 32000*(($fade-1.0) + $fade*sin($twopi_over100*$i));
-		}
-	}
-	push @samples, 0;
-	my $sampledata = pack 's<*', @samples;  # 16-bit signed little-endian
+sub sf_square2sine {
+	my $sampledata = pack 's<*', @SquareToSine;  # 16-bit signed little-endian
 	my $l = length $sampledata;
 	return (
       byOriginalKey => 69,
       chCorrection => -4,
       dwEnd => 100*$n_cycles,
-      dwEndloop => 100*($n_cycles-1),
+      dwEndloop => 100*($n_cycles-1),     # samples, not bytes
       dwSampleRate => 44100,
       dwStart => 0,
-      dwStartloop => 100*($n_cycles-3),
+      dwStartloop => 100*($n_cycles-3),   # samples, not bytes
       sampledata => $sampledata,
       sfSampleType => 1,
       wSampleLink => 0
+	);
+}
+
+sub gr_sawtooth2triangle {
+	# 16-bit signed little-endian;   See doc/timidity/instrum.[ch]
+	# MODES_16BIT    1  MODES_UNSIGNED 2  MODES_LOOPING   4  MODES_PINGPONG  8
+	# MODES_REVERSE 16  MODES_SUSTAIN 32  MODES_ENVELOPE 64  MODES_CLAMPED 128
+	my $sampledata = pack 's<*', @SawtoothToTriangle;
+	my $l = length $sampledata; # warn "l=$l\n";
+	return (
+		balance => 7,
+		data => $sampledata,
+		envelope_data => "\x3f\x46\x81\x42\x3f\x3f\xd5\xf2\xf6\x08\x08\x08",
+		high_freq => 10000000,
+		loop_end => 200*($n_cycles-1),    # bytes, not samples
+		loop_start => 200*($n_cycles-3),  # bytes, not samples
+		low_freq => 20000,
+		mode => 1+4+32+64,
+		root_freq => 440000,
+		sample_name => 'smpl_1',
+		sample_rate => 44100,
+		scale_factor => 1024,
+		scale_freq => 60,
+		tune => 1
+	);
+}
+
+sub gr_square2sine {
+	my $sampledata = pack 's<*', @SquareToSine;  # 16-bit signed little-endian
+	my $l = length $sampledata;
+	return (
+		balance => 7,
+		data => $sampledata,
+		envelope_data => "\x3f\x46\x81\x42\x3f\x3f\xd5\xf2\xf6\x08\x08\x08",
+		high_freq => 10000000,
+		loop_end => 200*($n_cycles-1),  # bytes, not samples
+		loop_start => 200*($n_cycles-3),  # bytes, not samples
+		low_freq => 20000,
+		mode => 1+4+32+64,
+		root_freq => 440000,
+		sample_name => 'smpl_2',
+		sample_rate => 44100,
+		scale_factor => 1024,
+		scale_freq => 60,
+		tune => 1
 	);
 }
 
@@ -184,10 +241,14 @@ that comes with the I<MIDI::SoundFont> CPAN module.
 
 =over 3
 
-=item I<-o /home/soundfonts/Bank5.sf2>
+=item I<-d /home/soundfonts>
 
-Sets the output filename, to I</home/soundfonts/Bank5.sf2> in this example.
-The default is I</tmp/Bank5.sf2>
+Sets the output directory, to I</home/soundfonts> in this example.
+In this directory, the files I<Bank5.sf2>,
+I<SawtoothToTriangle.pat> and
+I<SquareToSine.pat>
+will be created.
+The default directory is I</tmp>.
 
 =item I<-c>
 

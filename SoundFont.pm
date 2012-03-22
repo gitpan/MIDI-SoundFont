@@ -11,7 +11,11 @@ package MIDI::SoundFont;
 no strict;
 use bytes;
 #my $debug = 1; use Data::Dumper;
-$VERSION = '1.03';
+$VERSION = '1.04';
+$VERSION_DATE = '22mar2012';
+
+# 20120322 1.04 pack a=zeropadded rather than A=spacepadded; introduce
+#               new_gf(), gravis2file now works, and make_bank5 does gravis too
 # 20120320 1.03 new_sf(), and chCorrection is packed as signed
 # 20120318 1.02 detect duplicate Preset,Inst,Sample names and uniquely rename
 # 20120216 1.01 gravis2file writes .zip files
@@ -706,10 +710,10 @@ sub sf2bytes{ my %sf = @_;   # put it back together with RIFF
 		my @these_pbags = @{$p_ref->{'pbags'}};
 		# check that the instrument-generator is last in @these_pbags #7.3
 		push @pbag_list, @these_pbags;
-        push @phdr_data, pack('A20SSSLLL', $p_ref->{'achPresetName'},
+        push @phdr_data, pack('a20SSSLLL', $p_ref->{'achPresetName'},
 		 $p_ref->{'wPreset'}, $p_ref->{'wBank'}, $wPresetBagNdx, 0,0,0);
 	}
-	push @phdr_data, pack('A20SSSLLL', 'EOP',0,0,(scalar @pbag_list),0,0,0);
+	push @phdr_data, pack('a20SSSLLL', 'EOP',0,0,(scalar @pbag_list),0,0,0);
 	my $phdr_ck = new File::Format::RIFF::Chunk;
 	$phdr_ck->id('phdr');
 	$phdr_ck->data(join('', @phdr_data));
@@ -783,9 +787,9 @@ sub sf2bytes{ my %sf = @_;   # put it back together with RIFF
         my $wInstBagNdx = scalar @ibag_list;
         my @these_ibags = @{$i_ref->{'ibags'}};
         push @ibag_list, @these_ibags;
-        push @inst_data, pack('A20S', $inst_name, $wInstBagNdx);
+        push @inst_data, pack('a20S', $inst_name, $wInstBagNdx);
     }
-    push @inst_data, pack('A20S', 'EOI',(scalar @ibag_list));
+    push @inst_data, pack('a20S', 'EOI',(scalar @ibag_list));
     my $inst_ck = new File::Format::RIFF::Chunk;
     $inst_ck->id('inst');
     $inst_ck->data(join('', @inst_data));
@@ -863,7 +867,7 @@ sub sf2bytes{ my %sf = @_;   # put it back together with RIFF
 		my $start;
 		$start = (length $samples)/2;
 		$samples .= $shdr->{'sampledata'} . "\0"x92;
-		push @shdr_data, pack 'A20LLLLLCcSS', $samplename,
+		push @shdr_data, pack 'a20LLLLLCcSS', $samplename,
 		  $start, $start+$smpl_length, $start+$to_startloop,
 		  $start+$to_endloop, $shdr->{'dwSampleRate'},
 	 	  $shdr->{'byOriginalKey'}, $shdr->{'chCorrection'},
@@ -1009,7 +1013,7 @@ sub bytes2pat { my $bytes = $_[0];
 	  $num_waveforms,$master_vol,$data_length, $reserved)
 	  = unpack ('A12 A10 A60 C C C S S L C36', $header);
 	my %pat = ();
-	$pat{'manufacturer'} = $manufacturer;
+	# $pat{'manufacturer'} = $manufacturer; ID#000002 is mandatory for timidity
 	$description =~ s/\0.*$//s;
 	$description =~ tr /\cZ//d;
 	$pat{'description'}  = $description;
@@ -1026,7 +1030,7 @@ sub bytes2pat { my $bytes = $_[0];
 		$instr_name =~ s/\0.*$//s;
 		$instr_name =~ tr /\cZ//d;
 		$instr{'instr_name'} = $instr_name;
-		$instr{'instr_size'} = $instr_size;
+		# $instr{'instr_size'} = $instr_size;  # 1.04
 		# $instr{'num_layers'} = $num_layers;
 		my @layers = ();
 		foreach (1 .. $num_layers) {
@@ -1036,11 +1040,15 @@ sub bytes2pat { my $bytes = $_[0];
 			my @wavsamples = ();
 			foreach (1 .. $num_wavsamples) {
 				my $wav_header = substr $bytes, $index, 96;  $index += 96;
+				# tremolo: sweep 46, phase 43, depth 32
+				# vibrato: sweep 1443, ctl 818, depth 32
 				my ($sample_name, $fractions, $data_size, $loop_start,
 				 $loop_end, $sample_rate, $low_freq, $high_freq, $root_freq,
-				 $tune, $balance, $envelope_data, $tremolo_data, $mode,
-				 $scale_freq, $scale_factor) =
-				 unpack('A7 C L L L S L L L S C C12 C6 C S S',$wav_header);
+				 $tune, $balance, $envelope_data,
+				 $tremolo_sweep, $tremolo_phase, $tremolo_depth,
+				 $vibrato_sweep, $vibrato_ctl,   $vibrato_depth,
+				$mode, $scale_freq, $scale_factor) =
+				 unpack('a7 C L L L S L L L S C a12 C6 C S S',$wav_header);
 				$sample_name =~ s/\0.*$//s;
 				my $data=substr $bytes,$index,$data_size; $index+=$data_size;
 				push @wavsamples, {
@@ -1054,7 +1062,12 @@ sub bytes2pat { my $bytes = $_[0];
 					tune => $tune,
 					balance => $balance,
 					envelope_data => $envelope_data,
-					tremolo_data => $tremolo_data,
+					tremolo_sweep => $tremolo_sweep,
+					tremolo_phase => $tremolo_phase,
+					tremolo_depth => $tremolo_depth,
+					vibrato_sweep => $vibrato_sweep,
+					vibrato_ctl   => $vibrato_ctl,
+					vibrato_depth => $vibrato_depth,
 					mode => $mode,
 					scale_freq => $scale_freq,
 					scale_factor => $scale_factor,
@@ -1089,14 +1102,24 @@ sub pat2bytes {  my %pat = @_;
 			my @this_layer_data = ();
 			my @wavsamples = @{$layerref->{'wavsamples'}};
 			foreach my $wref (@wavsamples) {
+				my $wave_size = length($wref->{'data'});  # bytes? samples?
+				# XXX to relate to  timidity -idvv  I should extract:
+				# tremolo: sweep 46, phase 43, depth 32
+				# vibrato: sweep 1443, ctl 818, depth 32
+				# mode: 0x65
+				# ? what's this ?  volume comp: 1.024000
 				push @this_layer_data,
-				  pack('A7 C L L L S L L L S C C12 C6 C S S C36',
-				  $wref->{'sample_name'},0,length($wref->{'data'}),
+				  pack('a7 C L L L S L L L S C a12 C6 C S S C36',
+				  $wref->{'sample_name'}, 0, $wave_size,
 				  $wref->{'loop_start'}, $wref->{'loop_end'},
 				  $wref->{'sample_rate'}, $wref->{'low_freq'},
 				  $wref->{'high_freq'}, $wref->{'root_freq'}, $wref->{'tune'},
 				  $wref->{'balance'}, $wref->{'envelope_data'},
-				  $wref->{'tremolo_data'}, $wref->{'mode'},
+				  $wref->{'tremolo_sweep'}, $wref->{'tremolo_phase'},
+				  $wref->{'tremolo_depth'},
+				  $wref->{'vibrato_sweep'}, $wref->{'vibrato_ctl'},
+				  $wref->{'vibrato_depth'},
+				  $wref->{'mode'},
 				  $wref->{'scale_freq'}, $wref->{'scale_factor'}, 0
 				);
 				push @this_layer_data, $wref->{'data'};
@@ -1107,15 +1130,17 @@ sub pat2bytes {  my %pat = @_;
 			push @all_layer_data, @this_layer_data;
 			$previous = $id;  $id += 1;
 		}
-        push @inst_data, pack('S A16 L C A40', $instr_num,
-		$instref->{'instr_name'}, length(join '',@all_layer_data),
-		scalar @layers, 0);
+		my $instr_size = length(join '',@all_layer_data);
+		my $num_layers = scalar @layers;
+        push @inst_data, pack('S a16 L C A40', $instr_num,
+		$instref->{'instr_name'}, $instr_size, $num_layers, '');
         push @inst_data, @all_layer_data;
 		push @pat_data, @inst_data;
 		$instr_num += 1;
 	}
-	unshift @pat_data, pack ('A12 A10 A60 C C C S S L C36', 'GF1PATCH110',
-	  $pat{'manufacturer'}, $pat{'description'}, (scalar @instruments),
+	unshift @pat_data, pack ('a12 a10 a60 C C C S S L C36', 'GF1PATCH110',
+	  'ID#000002',   # manufacturer=ID#000002 is mandatory for timidity
+	  $pat{'description'}, (scalar @instruments),
 	  14, 1, $num_waveforms, 100, length(join '',@pat_data), 0);
 	return join '', @pat_data;
 }
@@ -1155,6 +1180,55 @@ sub gravis2file { my $file = shift;
 		warn "it has to be either a .pat or a .zip file\n"; return 0;
 	}
 	return 1;
+}
+
+sub new_pat {
+	# See doc/timidity/instrum.[ch]
+	# MODES_16BIT    1  MODES_UNSIGNED 2  MODES_LOOPING   4  MODES_PINGPONG  8
+	# MODES_REVERSE 16  MODES_SUSTAIN 32  MODES_ENVELOPE 64  MODES_CLAMPED 128
+	return (
+		description  => 'description of patch',
+		filename     => 'filename of patch',
+		num_channels => 0,
+		num_voices   => 14,
+		instruments => [
+			{
+				instr_name => 'instrument name',
+				instr_num  => 'instrument number',
+				layers => [
+					{
+						id => 0,
+						previous => 0,
+						wavsamples => [
+							{
+								balance => 7,
+								data => ' ... ',
+								envelope_data =>
+						"\x3f\x46\x81\x42\x3f\x3f\xd5\xf2\xf6\x08\x08\x08",
+								high_freq => 10000000,
+								loop_end => 266282,
+								loop_start => 149902,
+								low_freq => 20000,
+								mode => 1+4+32+64,
+								root_freq => 261625,
+								sample_name => 'name of sample',
+								sample_rate => 44100,
+								scale_factor => 1024,
+								scale_freq    => 69,
+								tremolo_depth => 0,
+								tremolo_phase => 0,
+								tremolo_sweep => 0,
+								vibrato_depth => 0,
+								vibrato_ctl => 0,
+								vibrato_sweep => 0,
+								tune => 1,
+							}
+						]
+					},
+       			],
+			},
+		],
+	);
 }
 
 sub timidity_cfg { my $file = shift; my %sf_or_gr = @_;
@@ -1466,7 +1540,6 @@ See:
 I<file2gravis($filename)> returns a hash with keys:
 I<description>,
 I<filename>,
-I<manufacturer>,
 I<num_channels>, and
 I<num_voices>,
 which have scalar values, and
@@ -1496,7 +1569,12 @@ I<sample_name>,
 I<sample_rate>,
 I<scale_factor>,
 I<scale_freq>,
-I<tremolo_data> and
+I<tremolo_depth>,
+I<tremolo_phase>,
+I<tremolo_sweep>,
+I<vibrato_depth>,
+I<vibrato_ctl>,
+I<vibrato_sweep> and
 I<tune>,
 which have scalar values.
 
@@ -1505,9 +1583,15 @@ I<doc/gravis.txt>
 I<doc/headers.c>
 I<doc/timidity/instrum.c>
 I<doc/timidity/instrum.h>
-I<doc/timidity/playmidi.c> and
-I<doc/wav2pat.c>
-for details of what the values mean...
+I<doc/timidity/playmidi.c>
+I<doc/wav2pat.c> and
+I<ftp://ftp.gravis.com/Public/Sdk/>
+for more details of what the values mean.
+The tremolo and vibrato data displayed by
+B<timidity -idvv -x 'bank 0\n0 ./gravis/fiddle.pat'>
+are different from the values of the tremolo and vibrato variables above
+because they have been multiplied by corresponding control ratios:
+see I<doc/timidity/instrum.c>
 
 See:
 I<test.pl> and
@@ -1545,8 +1629,9 @@ Several of the parameters seem obscure: for example,
 I<num_channels> is often zero, when it should be either 1 or 2,
 and I<instr_num> is either zero or, in non-Gravis patches, usually random.
 In the I<wavsample> section, I<low_freq> and I<high_freq> seem large
-(perhaps in hundreths of Hz?). I would have expected a MIDI pitch there,
-like low=48 high=72, corresponding to the SoundFont I<key range> parameter,
+(perhaps in thousandths of Hz? See:
+I<ftp://ftp.gravis.com/Public/Sdk/PATCHKIT.ZIP>).
+These are the parameters that must correspond to the SoundFont I<key range>,
 allowing different wavsamples to be used for different tessituras.
 See:
   perl examples/sf_list gravis/fiddle.pat | less
@@ -1666,6 +1751,7 @@ Peter J Billam, http://www.pjb.com.au/comp/contact.html
  http://www.pjb.com.au/midi/sfspec21.html
  http://www.onicos.com/staff/iz/timidity/dist/tools-1.1.0/wav2pat.c
  http://timidity.sourceforge.net
+ ftp://ftp.gravis.com/Public/Sdk/
  man timidity         - (1) MIDI-to-WAVE converter and player
  man timidity.cfg     - (5) configure file of TiMidity++
 

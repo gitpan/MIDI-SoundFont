@@ -60,7 +60,7 @@ OFFSET              Count TYPE   Description
 002Fh                   1 byte   Vibrato sweep
 0030h                   1 byte   Vibrato rate
 0031h                   1 byte   Vibrato depth
-0032h                   1 byte   Wave data, bitmapped
+0032h                   1 byte   Wave data, bitmapped 0/1
                                    0 - 8/16 bit wave data
                                    1 - signed/unsigned data
                                    2 - de/enable looping

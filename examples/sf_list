@@ -10,8 +10,8 @@
 eval 'require MIDI::SoundFont'; if ($@) {
 	die "you'll need to install MIDI::SoundFont from www.cpan.org\n";
 }
-my $Version       = '1.0';
-my $VersionDate   = '24feb2012';
+my $Version       = $MIDI::SoundFont::VERSION;
+my $VersionDate   = $MIDI::SoundFont::VERSION_DATE;
 use bytes;
 require Data::Dumper;
 $Data::Dumper::Indent = 1;
@@ -110,7 +110,8 @@ if ($file_type eq 'sf2') {
 		foreach my $smpl_name (sort keys %shdr_hash) {
 			my $s_ref = $shdr_hash{$smpl_name};
 			if ($samples_wanted{$smpl_name}) {
-				$s_ref->{'sampledata'} = ' ... ';
+				my $len = length $s_ref->{'sampledata'};
+				$s_ref->{'sampledata'} = " ... $len bytes ... ";
 			} else {
 				delete $shdr_hash{$smpl_name};
 			}
@@ -125,7 +126,11 @@ if ($file_type eq 'sf2') {
 		foreach my $i (@{$gravis{$filename}{'instruments'}}) {
 			foreach my $l (@{$i->{'layers'}}) {
 				foreach my $w (@{$l->{'wavsamples'}}) {
-					$w->{'data'} = ' ... ';
+					my $len = length $w->{'data'};
+					$w->{'data'} = " ... $len bytes ... ";
+					@a = split '', $w->{'envelope_data'};
+					$w->{'envelope_data'}
+					  = join(' ', map { sprintf('%02x',ord($_)) } @a);
 				}
 			}
 		}
