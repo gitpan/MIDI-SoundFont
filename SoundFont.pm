@@ -11,9 +11,10 @@ package MIDI::SoundFont;
 no strict;
 use bytes;
 #my $debug = 1; use Data::Dumper;
-$VERSION = '1.04';
-$VERSION_DATE = '22mar2012';
+$VERSION = '1.05';
+$VERSION_DATE = '09aug2012';
 
+# 20120809 1.05 added the csound_scoresynth and csound_midisynth examples
 # 20120322 1.04 pack a=zeropadded rather than A=spacepadded; introduce
 #               new_gf(), gravis2file now works, and make_bank5 does gravis too
 # 20120320 1.03 new_sf(), and chCorrection is packed as signed
@@ -25,18 +26,20 @@ require Exporter;
 require DynaLoader;
 @ISA = qw(Exporter DynaLoader);
 @EXPORT = ();
-@EXPORT_OK = qw(
-  GeneratorOperators genAmountType 
-  bytes2sf file2sf sf2bytes sf2file new_sf
-  file2gravis gravis2file timidity_cfg
+@EXPORT_OK = qw( GeneratorOperators GenAmountType bytes2sf file2sf
+  sf2bytes sf2file new_sf file2gravis gravis2file new_pat timidity_cfg
 );
-@EXPORT_CONSTS = qw(GeneratorOperators genAmountType);
-%EXPORT_TAGS = (ALL => [@EXPORT,@EXPORT_OK], CONSTS => [@EXPORT_CONSTS]);
+@EXPORT_CONSTS = qw(GeneratorOperators GenOpname2num GenAmountType
+  MODES_16BIT   MODES_UNSIGNED MODES_LOOPING  MODES_PINGPONG
+  MODES_REVERSE MODES_SUSTAIN  MODES_ENVELOPE MODES_CLAMPED);
+%EXPORT_TAGS = (ALL => [@EXPORT_OK], CONSTS => [@EXPORT_CONSTS]);
+
 eval 'require File::Format::RIFF';
 if ($@) {
  die "you need to install the File::Format::RIFF module from www.cpan.org\n";
 }
 local $[ = 0;   # SoundFont indexes start at zero
+my %SampleName = ();   # to avoid duplicating sample-names...
 
 # ----------------------- exportable constants -----------------------
 @GeneratorOperators = qw(
@@ -63,7 +66,7 @@ local $[ = 0;   # SoundFont indexes start at zero
 		$i += 1;
 	}
 }
-@genAmountType = qw (
+@GenAmountType = qw (
 	S s s s
 	s s s s
 	s s s s
@@ -82,8 +85,17 @@ local $[ = 0;   # SoundFont indexes start at zero
 	x
 );  # s signed, S unsigned, C2 two bytes, x null; sfspec21 8.1.2 & guesswork
 
+$MODES_16BIT    = 1;  $MODES_UNSIGNED = 2;
+$MODES_LOOPING  = 4;  $MODES_PINGPONG = 8;
+$MODES_REVERSE  = 16; $MODES_SUSTAIN  = 32;
+$MODES_ENVELOPE = 64; $MODES_CLAMPED  = 128;
+
+# sf:
 # see http://www.pjb.com.au/midi.sfspec21.html#8.1.3
 my %OnlyValidInInstr = map { $_, 1 } (0,1,2,3,4,12,45,50,54,57,58);
+# gravis:
+my $DefaultEnvelopeData = "\x3f\x46\x81\x42\x3f\x3f\xd5\xf2\xf6\x08\x08\x08";
+
 
 # ----------------------- exportable functions -----------------------
 sub file2bytes {
@@ -368,7 +380,7 @@ sub bytes2sf { my $bytes = $_[0];   # take it apart with RIFF
 	while ($ind < $len) {
 		my $igen_rec = substr $pdta{'igen'}, $ind, 4;
 		my ($sfGenOper,$dummy) = unpack 'SS', $igen_rec;
-		my $type = $genAmountType[$sfGenOper];
+		my $type = $GenAmountType[$sfGenOper];
 		if (! defined $type) {
 			warn "sfGenOper=$sfGenOper out of range\n"; return;
 		}
@@ -409,7 +421,7 @@ sub bytes2sf { my $bytes = $_[0];   # take it apart with RIFF
 	while ($ind < $len) {
 		my $pgen_rec = substr $pdta{'pgen'}, $ind, 4;
 		my ($sfGenOper,$dummy) = unpack 'SS', $pgen_rec;
-		my $type = $genAmountType[$sfGenOper];
+		my $type = $GenAmountType[$sfGenOper];
 		if (! defined $type) {
 			warn "sfGenOper=$sfGenOper out of range\n"; return;
 		}
@@ -563,7 +575,6 @@ sub new_sf { my $inam = $_[$[] || 'Name of this SoundFont';
 						},
 						modulators => [],
         			},
-
 				],
 			},
 		},
@@ -755,7 +766,7 @@ sub sf2bytes{ my %sf = @_;   # put it back together with RIFF
 				push @inst_list, $inst_name;
 			}
 		}
-		my $type = $genAmountType[$g_ref->[0]];
+		my $type = $GenAmountType[$g_ref->[0]];
         push @pgen_data, pack("S$type", @{$g_ref});
 	}
 	push @pgen_data, ("\0"x4);
@@ -830,7 +841,7 @@ sub sf2bytes{ my %sf = @_;   # put it back together with RIFF
 				$smpl_name2index{$samplename} = $g_ref->[1];
 			}
 		}
-		my $type = $genAmountType[$g_ref->[0]];
+		my $type = $GenAmountType[$g_ref->[0]];
         push @igen_data, pack("S$type", @{$g_ref});
 	}
 	push @igen_data, ("\0"x4);
@@ -914,7 +925,7 @@ sub gen_hashref2list { my ($gen_hashref, $is_p_or_i) = @_;
 	my $last_item;
 	while (my ($name, $shAmount) = each %{$gen_hashref}) {
 		my $sfGenOper = $GenOpname2num{$name};
-		my $type = $genAmountType[$sfGenOper];
+		my $type = $GenAmountType[$sfGenOper];
 		if (! defined $type) {
 			warn "unrecognised generator=$generator\n"; return;
 		}
@@ -948,11 +959,90 @@ sub gen_hashref2list { my ($gen_hashref, $is_p_or_i) = @_;
 	return @gen_list;
 }
 
-sub raw2shdr { my ($achSampleName,$byOriginalKey,$dwSampleRate,$sampledata)=@_;
+sub file2smpl { my ($filename, $original_key, $opt_ref) = @_;
+	my %opt = %{$opt_ref};  # noloop
+	# NB: from_key, to_key, from_vel, to_vel go in the ibags, not the shdrs
+	# we generate $SampleID = $achSampleName from the basename of $filename
+	# keeping an eye out for duplicates.
+	# $original_key can be fractional, e.g. 60.4
+	# looping seems mandatory in sf, so 'noloop' means:
+	#   pushing >32 zero-samples onto the end, and looping them.
+	# invoke file2raw  then  raw2shdr
+	my ($sample_rate, $data) = file2raw($filename);
+	if (! defined $data) { return; }
+	use File::Basename;
+	my $base = basename($filename);
+	$base =~s/\.\w\w\w\w?$//;
+	my $sample_name = $base;
+	if ($SampleName{$sample_name}) {
+		my $i = 0;
+		while (1) {
+			$i += 1;
+			$sample_name = $base.'_'.$i;
+			if (! $SampleName{$sample_name}) { last; }
+		}
+	}
+	my %shdr = ();
+	if ($opt{'noloop'}) {
+		my $len = length $data;   # warn "len = $len\n";
+		my @zeros = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+		@zeros = (@zeros,@zeros,$zeros);   # 48 of them
+		%shdr = raw2shdr($sample_name, $original_key, $sample_rate,
+		  $data . pack('s<*', @zeros));
+		$shdr{$sample_name}->{'dwStartloop'} = $len+4;
+		$shdr{$sample_name}->{'dwEndloop'}   = $len+44;
+	} else {
+		%shdr = raw2shdr($sample_name, $original_key, $sample_rate, $data);
+		set_looppoints($shdr{$sample_name});
+	}
+	return $shdr{$sample_name};
+}
+sub file2wavsample { my $filename = $_[$[];  # provide a 'noloop' option ?
+	# need to know sample_name, byOriginalKey
+	# invoke file2raw  then  raw2wavsample
+}
+
+sub file2raw { my $file = $_[$[];
+	if (! -e $file) { warn "does not exist: $file\n"; return; }
+	if (! -f $file) { warn "not a file: $file\n"; return; }
+	if (! -r $file) { warn "not readable: $file\n"; return; }
+	# Use soxi $file to ascertain the channels and sample-rate
+	# (don't use File::Format::RIFF because that only handles .wav files)
+	# It would be more elegant if there were a CPAN libsox module...
+	if (! open(P, '-|', "soxi",$file)) {
+		warn "can't run soxi '$file': $!\n"; return;
+	}
+	my $channels = 2; my $sample_rate = 44100;
+	while (<P>) {
+		if (/^Channels\s+:\s*(\d+)/)    { $channels = 0+$1; next; }
+		if (/^Sample Rate\s+:\s*(\d+)/) { $sample_rate = 0+$1; next; }
+	}
+	close P;
+	my $tmp; my @data = ();
+	if ($channels == 1) {   # if already mono:
+		if (! open(P, '-|', "sox '$file' -t raw -c 1 -b 16 -e signed -")) {
+			warn "can't run sox '$file': $!\n"; return;
+		}
+	} else {   # stereo to mono:
+		if (!open(P,"sox '$file' -t raw -c 1 -b 16 -e signed - remix 1,2 |")) {
+			warn "can't run sox '$file': $!\n"; return;
+		}
+	}
+	while (read P, $tmp, 65536) { push @data, $tmp; }
+	close P;
+	return ($sample_rate, join('',@data));
+}
+
+sub raw2shdr { my ($achSampleName,$original_key,$dwSampleRate,$sampledata)=@_;
+	# the 16-bit signed $sampledata might come from a file through file2raw(),
+	# but might come from a user-supplied wavetable
+	# Do we invoke set_looppoints($sampledata) from here ? noloop option...
+	my $byOriginalKey = round($original_key);
+	my $chCorrection = round(100 * ($original_key-$byOriginalKey));
 	return ($achSampleName => {  # 1.03
       byOriginalKey => $byOriginalKey,
       chCorrection => $chCorrection,
-      dwEnd => $dwEnd,
+      dwEnd => length $sampledata,
       dwEndloop => $dwEndloop,
       dwSampleRate => $dwSampleRate,
       dwStart => 0,
@@ -961,6 +1051,154 @@ sub raw2shdr { my ($achSampleName,$byOriginalKey,$dwSampleRate,$sampledata)=@_;
       sfSampleType => 1,
       wSampleLink => 0
 	});
+}
+
+sub raw2wavsample { my ($sample_name,$root_freq,$sample_rate,$data)=@_;
+	# hopefully you used sox to convert data to .s16 raw signed 16bit mono
+	# Need to be able to handle non-looped samples...
+	# invoke raw2looppoints( ... , $data);
+	return {
+	  balance => 7,
+	  data => $data,
+	  envelope_data => $DefaultEnvelopeData,
+	  high_freq => 10000000,
+	  loop_end => 87800,
+	  loop_start => 87400,
+	  low_freq => 20000,
+	  mode => 101,
+	  root_freq => 440000,
+	  sample_name => $sample_name||'NoName',
+	  sample_rate => 44100,
+	  scale_factor => 1024,
+	  scale_freq => 60,
+	  tremolo_depth => 0,
+	  tremolo_phase => 0,
+	  tremolo_sweep => 0,
+	  tune => 1,
+	  vibrato_ctl => 0,
+	  vibrato_depth => 0,
+	  vibrato_sweep => 0
+	};
+}
+sub set_looppoints { my $sr = $_[$[]; # shdr_ref_or_wavsample_ref
+	# pass it a shdr_ref or a wavsample_ref and it will fill in the
+	# dwStartloop and dwEndloop, or loop_start and loop_end, and adjust
+	# the sample values in the loop for smoothest possible looping
+	my $samples_per_cycle;
+	if (defined $sr->{'dwStart'}) {     # it's a soundfont shdr
+		# dwStart dwEnd  byOriginalKey chCorrection  dwSampleRate  sampledata
+		my @data = unpack 's<*', $sr->{'sampledata'};
+		splice @data, $[, round(0.5 * ($[+$sr->{'dwStart'})); # bytes 2 samples
+		$sr->{'dwEnd'} -= $sr->{'dwStart'};
+		$sr->{'dwStart'} = $[;
+		my $samples_per_cycle = $sr->{'dwSampleRate'}
+		 / midipitch2freq($sr->{'byOriginalKey'} + 0.01*$sr->{'chCorrection'});
+		($start, $end) = raw2looppoints($samples_per_cycle, \@data);
+		$sr->{'dwStartloop'} = 2 * $start;  # samples to bytes
+		$sr->{'dwEndloop'}   = 2 * $end;    # samples to bytes
+		$sr->{'sampledata'}  = pack 's<*', @data;
+		return $sr;
+	} elsif (defined $sr->{'mode'}) {   # it's a gravis wavsample
+		# root_freq  sample_rate  data
+		my @data = ();
+		if ($MODES_UNSIGNED && $sr->{'data'}) {  # could test 16BIT ?
+			@data = unpack 's<*', @{$sr->{'data'}};
+		} else {
+			@data = unpack 'S<*', @{$sr->{'data'}};
+		}
+		my $samples_per_cycle = $sr->{'sample_rate'}
+		 / ($sr->{'sample_rate'} + $sr->{'tune'});  # check tune spec...
+		($start, $end) = raw2looppoints($samples_per_cycle, \@data);
+		$sr->{'loop_start'} = $start;  # samples
+		$sr->{'loop_end'}   = $end;    # samples
+		return $sr;
+	} else {
+		warn "set_looppoints: neither dwStart nor mode present\n";
+		return undef;
+	}
+}
+
+sub raw2looppoints { my ($samples_per_cycle, $data_ref) = @_;
+	# Find the pair of zero-crossings exactly integer cycles apart for which
+	# the neighboring samples v[x] are situated in the most similar-in-shape
+	# curves, weighting nearby samples heavier of course; return indexes
+	# in _samples_ not bytes.  Assume 16-bit signed little-endian.
+	my @data = @{$data_ref};
+	my @up_crossings = ();
+	my @down_crossings = ();
+	my $i = $[+1;  while ($i < $#data) {
+		if ($data[$i]==0) {
+			if ($data[$i-1]>0 and $data[$i+1]<0) { push @down_crossings, $i;
+			} elsif ($data[$i-1]<0 and $data[$i+1]>0) { push @up_crossings, $i;
+			}
+		} elsif (($data[$i-1]>0) and ($data[$i]<0)) { push @down_crossings, $i;
+		} elsif (($data[$i-1]<0) and ($data[$i]>0)) { push @up_crossings, $i;
+		}
+		$i += 1;
+	}
+warn "there are ".scalar(@up_crossings)." up_crossings\n";
+warn "there are ".scalar(@down_crossings)." down_crossings\n";
+	my $best_start = $[; my $best_end = $#data; my $best_goodness = 0;
+# too slow. must choose a loop_length .1<x<.5 sec closest to a multiple of
+# $samples_per_cycle, then look for the several pairs of crossings closest
+# to that distance apart, then choose the pair with the best goodness.
+	foreach my $is (round(0.75*scalar(@up_crossings)) .. ($#up_crossings-1)) {
+		foreach my $ie (($is+1) .. $#up_crossings) {
+			my $goodness = goodness_of_fit($is,$ie,$samples_per_cycle,\@data);
+			if ($goodness > $best_goodness) {
+				$best_start=$is; $best_end=$ie; $best_goodness=$goodness;
+			}
+		}
+	}
+	foreach my $is (round(0.75*scalar(@down_crossings))..($#down_crossings-1)){
+		foreach my $ie (($is+1) .. $#down_crossings) {
+			my $goodness = goodness_of_fit($is,$ie,$samples_per_cycle,\@data);
+			if ($goodness > $best_goodness) {
+				$best_start=$is; $best_end=$ie; $best_goodness=$goodness;
+			}
+		}
+	}
+#warn "best_start=$best_start best_end=$best_end goodness=$best_goodness\n";
+	return ($best_start, $best_end);
+}
+sub smooth_a_loop { my ($start, $end, $samples_per_cycle, $data_ref) = @_;
+	# 1) +a*t to line up the end to the curve of the beginning
+	# then *b*t so that the graph of power/cycle is as horizontal as possible
+	# 2) then make a graph of the power (x*x)/cycle
+	# then *b*t so that the graph of power/cycle is as horizontal as possible
+}
+sub goodness_of_fit { my ($start, $end, $samples_per_cycle, $data_ref) = @_;
+	my @data = @{$data_ref};
+	# how close is $end-$start to a multiple of the cycle ?
+	my $cycles = ($end-$start) / $samples_per_cycle;
+	my $cycle_badness = 2.0 * abs($cycles - round($cycles));  # or square?
+#warn "cycle_badness=$cycle_badness\n";   # 0..1
+	# how close are $end and $start to .8 and .95 of the data ?
+	my $size = scalar @data;
+	my $space_badness = abs(0.625*($start-(0.8*$size))/$size)
+	 + abs(0.475*($end-(0.95*$size))/$size);
+	#warn "space_badness=$space_badness\n";   # 0..1
+	# how well do the +/-1/4 of a cycle data points match ?
+	my $match_badness = 0;
+	my $quarter_cycle = round(0.25 * $samples_per_cycle);
+	foreach my $i (0 .. $quarter_cycle) {
+		my $weight = (1+$quarter_cycle-$i) / $quarter_cycle;
+		$match_badness += $weight * abs($data[$end+$i] - $data[$start+$i]);
+		$match_badness += $weight * abs($data[$end-$i] - $data[$start-$i]);
+	}
+	$match_badness = $match_badness / ($quarter_cycle*32000);
+	#warn "match_badness=$match_badness\n";   # 0..1
+	my $goodness = 1.0 - 0.15*$cycle_badness
+	 - 0.15*$space_badness - 0.7*$match_badness;
+	#warn "goodness=$goodness\n";   # 0..1
+}
+sub midipitch2freq { my $pitch = $_[$[];
+	return 440 * (1.0594630943348**($pitch-69));
+}
+sub round   { my $x = $_[$[];
+	if ($x > 0.0) { return int ($x + 0.5); }
+	if ($x < 0.0) { return int ($x - 0.5); }
+	return 0;
 }
 
 # --------------------------- gravis routines -----------------------
@@ -1049,17 +1287,24 @@ sub bytes2pat { my $bytes = $_[0];
 				 $vibrato_sweep, $vibrato_ctl,   $vibrato_depth,
 				$mode, $scale_freq, $scale_factor) =
 				 unpack('a7 C L L L S L L L S C a12 C6 C S S',$wav_header);
+				# see doc/headers.c doc/gravis.c doc/timidity/instrum.c
+				# 6 bytes envelope_velf  and  6 bytes envelope_keyf,  ?
+				# (or  Filter envelope rate  and  Filter envelope offset ?)
+				# perhaps bytes: attack_vol attack_time decay_vol decay_time
+				# release_vol final_vol; then attack_freq attack_time
+				# decay_freq decay_time release_freq final_freq ?
+				# See convert_envelope_rate() and convert_envelope_offset()
 				$sample_name =~ s/\0.*$//s;
 				my $data=substr $bytes,$index,$data_size; $index+=$data_size;
 				push @wavsamples, {
 					sample_name => $sample_name,
-					loop_start => $loop_start,
-					loop_end => $loop_end,
+					loop_start  => $loop_start,
+					loop_end    => $loop_end,
 					sample_rate => $sample_rate,
-					low_freq => $low_freq,
-					high_freq => $high_freq,
-					root_freq => $root_freq,
-					tune => $tune,
+					low_freq    => $low_freq,
+					high_freq   => $high_freq,
+					root_freq   => $root_freq,
+					tune    => $tune,
 					balance => $balance,
 					envelope_data => $envelope_data,
 					tremolo_sweep => $tremolo_sweep,
@@ -1068,11 +1313,11 @@ sub bytes2pat { my $bytes = $_[0];
 					vibrato_sweep => $vibrato_sweep,
 					vibrato_ctl   => $vibrato_ctl,
 					vibrato_depth => $vibrato_depth,
-					mode => $mode,
-					scale_freq => $scale_freq,
-					scale_factor => $scale_factor,
-					# data_size  => $data_size ,
-					data => $data,
+					mode    => $mode,
+					scale_freq    => $scale_freq,
+					scale_factor  => $scale_factor,
+					# data_size   => $data_size ,
+					data    => $data,
 				};
 			}
 			push @layers, {
@@ -1203,8 +1448,7 @@ sub new_pat {
 							{
 								balance => 7,
 								data => ' ... ',
-								envelope_data =>
-						"\x3f\x46\x81\x42\x3f\x3f\xd5\xf2\xf6\x08\x08\x08",
+								envelope_data => $DefaultEnvelopeData,
 								high_freq => 10000000,
 								loop_end => 266282,
 								loop_start => 149902,
@@ -1578,6 +1822,17 @@ I<vibrato_sweep> and
 I<tune>,
 which have scalar values.
 
+Unlike the SoundFont format,
+the frequencies I<low_freq>, I<high_freq> and I<root_freq>
+are in thousandths of a Hz,
+and the I<loop_start> and I<loop_end> are in bytes, not samples.
+
+The I<mode> bits describes the format of the I<data>,
+and the following package variables can be imported with
+I<use MIDI::SoundFont(':CONSTS');>
+MODES_16BIT=1  MODES_UNSIGNED=2  MODES_LOOPING=4  MODES_PINGPONG=8
+MODES_REVERSE=16  MODES_SUSTAIN=32  MODES_ENVELOPE=64  MODES_CLAMPED=128
+
 See:
 I<doc/gravis.txt>
 I<doc/headers.c>
@@ -1589,12 +1844,13 @@ I<ftp://ftp.gravis.com/Public/Sdk/>
 for more details of what the values mean.
 The tremolo and vibrato data displayed by
 B<timidity -idvv -x 'bank 0\n0 ./gravis/fiddle.pat'>
-are different from the values of the tremolo and vibrato variables above
-because they have been multiplied by corresponding control ratios:
-see I<doc/timidity/instrum.c>
+are different from the values of the tremolo and vibrato variables above,
+because the I<timidity> variables have been multiplied by corresponding
+control ratios: see I<doc/timidity/instrum.c>
 
 See:
-I<test.pl> and
+I<test.pl>,
+I<examples/make_bank5> and
 I<examples/sf_list> for examples manipulating this data-structure.
 
 =head1 SOUNDFONT FILE-FORMAT
@@ -1683,6 +1939,14 @@ section either into a B<.pat> patch-file as documented in the
 GRAVIS FILE-FORMAT section,
 or into a B<.zip> archive of patch-files.
 
+=item %sf = new_pat()
+
+Returns a minimal empty I<patch> data-structure;
+the reference to this is a I<value> in the gravis data-structure
+documented above in the IN-MEMORY GRAVIS FORMAT section,
+the I<key> being the filename it will get when given a home in a I<.zip> file.
+See I<examples/make_bank5> in the I<examples/> directory.
+
 =item timidity_cfg($filename, %sf_or_gravis)
 
 This returns a suggested I<timidity.cfg> paragraph to
@@ -1701,7 +1965,7 @@ is used to guess some General-Midi-conformant patch-numbers.
 
 =head1 EXAMPLES
 
-Three simple examples in the I<examples/> subdirectory
+Five simple examples in the I<examples/> subdirectory
 are already useful applications:
 
 =over 3
@@ -1725,8 +1989,39 @@ operations such as moving Banks, deleting Patches.
 
 =item make_bank5
 
-I<make_bank5> puts together a I<SoundFont> file from scratch,
-using some simple waveforms.
+I<make_bank5> puts together a I<SoundFont> file from scratch, using some
+simple waveforms, and then puts together some substantially identical
+I<Gravis> patches.
+These files can be used successfully both by I<timidity> and by I<csound>,
+which is a reasonable test of
+MIDI::SoundFont's conformance to the file-formats.
+See:
+http://www.pjb.com.au/midi/free/Bank5.sf2
+http://www.pjb.com.au/midi/free/SawtoothToTriangle.pat
+and
+http://www.pjb.com.au/midi/free/SquareToSine.pat
+
+=item csound_scoresynth.csd
+
+I<csound_scoresynth.csd> evolves from the script
+explained on page 148 of the book I<Csound Power> by Jim Aikin.
+It shows how to load a SoundFont into I<csound> and play its notes
+directly from the I<Score> section of the I<.csd> file.
+
+It assumes you have run I<make_bank5>,
+so that the SoundFont I</tmp/Bank5.sf2> already exists.
+
+=item csound_midisynth.csd
+
+I<csound_midisynth.csd> evolves from the script I<fluidcomplex.csd>
+by Istvan Varga, as included in the I<csound> documentation.
+It shows how to load a SoundFont into I<csound>
+and play its notes using a midi keyboard,
+which you will have to connect by hand
+using some command such as I<aconnect ProKeys 14:0>
+
+It assumes you have run I<make_bank5>,
+so that the SoundFont I</tmp/Bank5.sf2> already exists.
 
 =back
 
@@ -1752,6 +2047,12 @@ Peter J Billam, http://www.pjb.com.au/comp/contact.html
  http://www.onicos.com/staff/iz/timidity/dist/tools-1.1.0/wav2pat.c
  http://timidity.sourceforge.net
  ftp://ftp.gravis.com/Public/Sdk/
+ http://www.csounds.com/manual/html/fluidEngine.html
+ http://www.csounds.com/manual/html/fluidNote.html
+ http://www.csounds.com/manual/html/fluidLoad.html
+ "Csound Power" by Jim Aikin, Course Technology, Cengage Learning, 2013,
+   ISBN-13 978-1-4354-6004-1
+   ISBN-10 1-4354-6004-9
  man timidity         - (1) MIDI-to-WAVE converter and player
  man timidity.cfg     - (5) configure file of TiMidity++
 

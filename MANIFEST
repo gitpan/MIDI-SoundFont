@@ -8,6 +8,8 @@ SoundFont.pm
 examples/sf_list
 examples/sf_edit
 examples/make_bank5
+examples/csound_scoresynth.csd
+examples/csound_midisynth.csd
 gravis/fiddle.pat
 gravis/gravis.cfg
 gravis/Gravis.zip

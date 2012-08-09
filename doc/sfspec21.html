@@ -1321,12 +1321,14 @@ The sfModSrcOper is a value of one of
 <A HREF="#8.2">the SFModulator enumeration type values.</A>
 Unknown or undefined values are ignored.
 This value indicates the source of data for the modulator.
-Note that this enumeration is two bytes in length.<BR>
+Note that this enumeration is two bytes in length.
+</P><P>
 The sfModDestOper indicates the destination of the modulator.
 The destination a value of one of
 <A HREF="#8.1.3">the SFGenerator enumeration type values.</A>
 Unknown or undefined values are ignored.
 Note that this enumeration is two bytes in length.
+</P><P>
 The SHORT modAmount is a signed value indicating the degree to which
 the source modulates the destination.
 A zero value indicates there is no fixed amount.
@@ -2593,23 +2595,23 @@ source pallettes.
 <A NAME="p50"></A>
 The following diagram contains the bit-wise specific information contained
 within a 16 bit SoundFont source enumeration:
-</P><P>
+</P><PRE>
 15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00
-</P><P>
-Type P D CC Index<BR>
-Type  = A 6 bit value specifying the continuity of the controller<BR>
-P  = Polarity<BR>
-D  = Direction<BR>
-CC = MIDI Continuous Controller Flag<BR>
-Index  = A 7 bit value specifying the controller source
+|......Type.....| P  D  C  |.......Index......|
+</PRE><P>
+<A HREF="#8.2.4">Type  = a 6-bit value specifying the continuity of the controller</A><BR>
+<A HREF="#8.2.3">P  = Polarity</A><BR>
+<A HREF="#8.2.2">D  = Direction</A><BR>
+<A HREF="#8.2.1">C  = MIDI Continuous Controller Flag</A><BR>
+<A HREF="#8.2.1">Index  = A 7 bit value specifying the controller source</A>
 </P><A NAME="8.2.1"></A><P>
 <B>8.2.1 Source Enumerator Controller Palettes</B>
-The SoundFont format supports two distinct controller palettes, based
-on the value of bit 7 in the source enumeration field.
-</P><P>
+The SoundFont format supports two distinct controller palettes,
+based on the value of bit 7 in the source enumeration field.
 If the 'C' bit is set to 0, the General Controller palette of controllers
-is selected. The 'index' field value corresponds to one of the following
-controller sources.
+is selected.
+</P><P>
+The 'index' field value corresponds to one of the following controller sources.
 All values not listed are reserved for future use. If such a value is
 encountered, the entire modulator structure should be ignored.
 <BR>
@@ -2630,15 +2632,15 @@ the given sound.
 <BR>
 <B>10 Poly Pressure</B>
 The controller source to be used is the poly-pressure
-amount that issent from the MIDI poly-pressure command.
+amount that is sent from the MIDI poly-pressure command.
 <BR>
 <B>13 Channel Pressure</B>
 The controller source to be used is the channel
-pressure amount that issent from the MIDI channel-pressure command.
+pressure amount that is sent from the MIDI channel-pressure command.
 <BR>
 <B>14 Pitch Wheel</B>
 The controller source to be used is the pitch wheel amount
-which issent from the MIDI pitch wheel command
+which is sent from the MIDI pitch wheel command
 <A NAME="p51"></A>
 <BR>
 <B>16 Pitch Wheel Sensitivity</B>
@@ -2661,7 +2663,7 @@ The SoundFont 2.01 format supports two directions for any controller.
 The direction is specified by bit 8 of the source enumeration field.
 </P><P>
 If the 'D' bit is set to 0, the direction of the controller should be
-from the minimum value to themaximum value. So, for example, if the
+from the minimum value to the maximum value. So, for example, if the
 controller source is Key Number, then Key Number value of 0
 corresponds to the minimum possible controller output, and Key Number
 value of 127 corresponds to the maximum possible controller input.
@@ -2721,13 +2723,14 @@ reversed.
 <B>3 Switch</B>
 The SoundFont modulator controller output is at a minimum
 valuewhile the controller input moves from the minimum to half of the
-maximum, after which the controller output is at a maximum. Thisoccurs
+maximum, after which the controller output is at a maximum. This occurs
 in the direction and with the polarity specified by the 'D' and 'P' bits.
 </P><A NAME="8.3"></A><P>
 <B>8.3  Modulator Transform Enumerators</B>
 The following values for the transform enumeration field are defined
-for SoundFont 2.01:
-0  Linear The output value of the multiplier is to be fed directly to
+for SoundFont 2.01:<BR>
+<B>0  Linear</B>
+The output value of the multiplier is to be fed directly to
 the summing node of the given destination.
 <A NAME="p53"></A>
 </P><A NAME="8.4"></A><P>
@@ -2750,7 +2753,7 @@ of these modulators, as well as the effect of Modulators upon
 default modulators in different levels in the SoundFont hierarchy.
 </P><A NAME="8.4.1"></A><P>
 <B>8.4.1  MIDI Note-On Velocity to Initial Attenuation</B><BR>
-Source Enumeration = 0x0502 (type=1, P=0, D=1, CC=0, index = 2)<BR>
+Source Enumeration = 0x0502 (type=1, P=0, D=1, C=0, index = 2)<BR>
 Destination Enumeration = Initial Attenuation<BR>
 Amount = 960<BR>
 Amount Source Enumeration = 0x0 (No controller)<BR>
@@ -2771,10 +2774,10 @@ The product of these values is passed through a Linear Transform
 generator.
 </P><A NAME="8.4.2"></A><P>
 <B>8.4.2  MIDI Note-On Velocity to Filter Cutoff</B><BR>
-Source Enumeration = 0x0102 (type=0, P=0, D=1, CC=0, index = 2)<BR>
+Source Enumeration = 0x0102 (type=0, P=0, D=1, C=0, index = 2)<BR>
 Destination Enumeration = Initial Filter Cutoff<BR>
 Amount = -2400 Cents<BR>
-Amount Source Enumeration = 0x502 (type=3, P=0, D=1, CC=0, index=2)<BR>
+Amount Source Enumeration = 0x502 (type=3, P=0, D=1, C=0, index=2)<BR>
 Transform Enumeration = 0 (Linear)<BR>
 The MIDI key number is used as a Negative Unipolar source; thus the
 input value of 1 is mapped to a value of 127/128, an input value of 127
@@ -2783,13 +2786,12 @@ and 1 in a linear fashion. The MIDI velocity number is also used as a
 secondary source for thismodulator; it is a negative unipolar switch. This
 has the effect of turning off velocity-to-filter for velocity
 numbers less than 64. The amount of this modulator is -2400 Cents.
-Note that the MIDI specification issuch that a note-on velocity amount of
+Note that the MIDI specification is such that a note-on velocity amount of
 zero indicates a note-off, thus it is not considered in this modulator.
 </P><P>
 <A NAME="p54"></A>
-The product of these values is passed through a Linear Transform (or
-is left uninhibited) and is added to the Initial Filter Cutoff generator
-summing node.
+The product of these values is passed through a Linear Transform (or is left
+uninhibited) and is added to the Initial Filter Cutoff generator summing node.
 Please note that the stipulation in the previous specification where
 this default modulator does not occur unless the volume envelope attack
 time is less than 7 msec has been removed. This stipulation may be
@@ -2801,7 +2803,7 @@ combined with the use of velocity as a secondary source with a switch
 curve approximates the original functionality of the AWE32 very closely.
 </P><A NAME="8.4.3"></A><P>
 <B>8.4.3  MIDI Channel Pressure to Vibrato LFO Pitch Depth</B><BR>
-Source Enumeration = 0x000D (type=0, P=0, D=0, CC=0, index = 13)<BR>
+Source Enumeration = 0x000D (type=0, P=0, D=0, C=0, index = 13)<BR>
 Destination Enumeration = Vibrato LFO to Pitch<BR>
 Amount = 50 cents/max excursion<BR>
 Amount Source Enumeration = 0x0 (No controller)<BR>
@@ -2816,13 +2818,13 @@ The product of these values is passed through a Linear Transform (or is left
 uninhibited) and is added to the Vibrato LFO to Pitch generator summing node.
 </P><A NAME="8.4.4"></A><P>
 <B>8.4.4  MIDI Continuous Controller 1 to Vibrato LFO Pitch Depth</B><BR>
-Source Enumeration = 0x0081 (type=0, P=0, D=0, CC=1, index = 1)<BR>
+Source Enumeration = 0x0081 (type=0, P=0, D=0, C=1, index = 1)<BR>
 Destination Enumeration = Vibrato LFO to Pitch<BR>
 Amount = 50<BR>
 Amount Source Enumeration = 0x0 (No controller)<BR>
 Transform Enumeration = 0 (Linear)<BR>
 The MIDI Continuous Controller 1 data value is used as a Positive
-Unipolar source; thus the input valueof 0 is mapped to a value of 0,
+Unipolar source; thus the input value of 0 is mapped to a value of 0,
 an input value of 127 is mapped to 127/128 and all other values are
 mapped between 0 and 127/128 in a linear fashion. The MIDI Continuous
 Controller 33 data value maybe optionally used for increased resolution
@@ -2836,7 +2838,7 @@ The product of these values is passed through a Linear Transform (or is left
 uninhibited) and is added to the Vibrato LFO to Pitch generator summing node.
 </P><A NAME="8.4.5"></A><P>
 <B>8.4.5  MIDI Continuous Controller 7 to Initial Attenuation</B><BR>
-Source Enumeration = 0x0587 (type=1, P=0, D=1, CC=1, index = 7)<BR>
+Source Enumeration = 0x0587 (type=1, P=0, D=1, C=1, index = 7)<BR>
 Destination Enumeration = Initial Attenuation<BR>
 Amount = 960<BR>
 Amount Source Enumeration = 0x0 (No controller)<BR>
@@ -2852,24 +2854,24 @@ The product of these values is passed through a Linear Transform (or is
 left uninhibited) and is added to the  initial attenuation generator.
 </P><A NAME="8.4.6"></A><P>
 <B>8.4.6  MIDI Continuous Controller 10 to Pan Position</B><BR>
-Source Enumeration = 0x028A (type=0, P=1, D=0, CC=1, index = 10)<BR>
+Source Enumeration = 0x028A (type=0, P=1, D=0, C=1, index = 10)<BR>
 Destination Enumeration = Initial Attenuation<BR>
 Amount = 1000 tenths of a percent<BR>
 Amount Source Enumeration = 0x0 (No controller)<BR>
 Transform Enumeration = 0 (Linear)<BR>
 The MIDI Continuous Controller 10 data value is used as a Positive
-Bipolar source; thus the input valueof 0 is mapped to a value of -1,
+Bipolar source; thus the input value of 0 is mapped to a value of -1,
 an input value of 127 is mapped to 127/128 and all other values are
-mapped between -1 and 127/128 in a linear fashion. There is no secondary
-source for this modulator; thus its effect is the same as the effect of
-multiplying the amount by 1. The amount of this modulator is
-1000 tenths of a percent panned-right.
+mapped between -1 and 127/128 in a linear fashion.
+There is no secondary source for this modulator;
+thus its effect is the same as the effect of multiplying the amount by 1.
+The amount of this modulator is 1000 tenths of a percent panned-right.
 The product of these values is passed through a "Linear" transform (or
 is left uninhibited) and is then added to the Pan generator summing node.
 <A NAME="p56"></A>
 </P><A NAME="8.4.7"></A><P>
 <B>8.4.7  MIDI Continuous Controller 11 to Initial Attenuation</B><BR>
-Source Enumeration = 0x058B (type=1, P=0, D=1, CC=1, index = 11)<BR>
+Source Enumeration = 0x058B (type=1, P=0, D=1, C=1, index = 11)<BR>
 Destination Enumeration = Initial Attenuation<BR>
 Amount = 960<BR>
 Amount Source Enumeration = 0x0 (No controller)<BR>
@@ -2886,7 +2888,7 @@ The product of these values is passed through a Linear Transform
 generator.
 </P><A NAME="8.4.8"></A><P>
 <B>8.4.8  MIDI Continuous Controller 91 to Reverb Effects Send</B><BR>
-Source Enumeration = 0x00DB (type=0, P=0, D=0, CC=1, index = 91)<BR>
+Source Enumeration = 0x00DB (type=0, P=0, D=0, C=1, index = 91)<BR>
 Destination Enumeration = Reverb Effects Send<BR>
 Amount = 200 tenths of a percent<BR>
 Amount Source Enumeration = 0x0 (No controller)<BR>
@@ -2899,12 +2901,11 @@ modulator; thus its effect is the same as the effect of multiplying the
 amount by 1.
 <BR>
 The amount of this modulator is 200 tenths of a percent added reverb send.
-The product of these values is passed through a "Linear" transform
-(or is left uninhibited) and is then added to the Reverb Send generator
-summing node.
+The product of these values is passed through a "Linear" transform (or is left
+uninhibited) and is then added to the Reverb Send generator summing node.
 </P><A NAME="8.4.9"></A><P>
 <B>8.4.9  MIDI Continuous Controller 93 to Chorus Effects Send</B><BR>
-Source Enumeration = 0x00DD (type=0, P=0, D=0, CC=1, index = 93)<BR>
+Source Enumeration = 0x00DD (type=0, P=0, D=0, C=1, index = 93)<BR>
 Destination Enumeration = Chorus Effects Send (Effects Send 2)<BR>
 Amount = 200 tenths of a percent<BR>
 Amount Source Enumeration = 0x0 (No controller)<BR>
@@ -2923,7 +2924,7 @@ uninhibited) and is then added to the Chorus Send generator summing node.
 </P><A NAME="8.4.10"></A><P>
 <B>8.4.10  MIDI Pitch Wheel to Initial Pitch Controlled by MIDI Pitch
 Wheel Sensitivity</B><BR>
-Source Enumeration = 0x020E (type=0, P=1, D=0, CC=0, index = 14)<BR>
+Source Enumeration = 0x020E (type=0, P=1, D=0, C=0, index = 14)<BR>
 Destination Enumeration = Initial Pitch<BR>
 Amount = 12700 Cents<BR>
 Amount Source Enumeration = 0x0010 (type=0, D=0, P=0, C=0, index=16)<BR>
@@ -2975,8 +2976,7 @@ These are:<BR>
 57 exclusiveClass<BR>
 58 overridingRootKey<BR>
 </P><P>
-If these generators are encountered in the Preset Level,
-they should be ignored.
+If these generators are encountered in the Preset Level, they should be ignored.
 The effect of modulators on a given destination is always relative to the
 generator value at the Instrument level. However modulators may supersede
 or add to other modulators depending on their position within the hierarchy.
@@ -3268,16 +3268,14 @@ zero, zero is assumed; when the gain exceeds 100%, 100% is used.
 <A NAME="p65"></A>
 </P><A NAME="9.4"></A><P>
 <B>9.4 The SoundFont Generator Model</B>
-Five kinds of Generator Enumerators exist: Index Generators, Range
-Generators,
+Five kinds of Generator Enumerators exist: Index Generators, Range Generators,
 Substitution Generators, Sample Generators, and Value Generators.
 </P><P>
 The following is the precedence of SoundFont generator in the SoundFont
 file format hierarchy.
 </P><UL><LI>
 A 'generator' sets or offsets the value of a destination or a
-synthesis parameter. In exception cases, it sets ranges (Range
-Generators),
+synthesis parameter. In exception cases, it sets ranges (Range Generators),
 or sets values and never offsets values
 (Index Generators, Sample Generators, and Substitution Generators).
 </LI><LI>
@@ -3300,7 +3298,7 @@ A generator in a global preset zone that is identical to a default
 generator or to a generator inan instrument adds to that generator.
 </LI><LI>
 A generator in a global preset zone which is not identical to a
-default generator and is notidentical to a generator in an instrument
+default generator and is not identical to a generator in an instrument
 has its effect added to the given synthesis parameter.
 </LI><LI>
 A generator in a local preset zone that is identical to a generator
@@ -3312,9 +3310,9 @@ A generator in a local preset zone which is not identical to a default
 generator or a generator ina global preset zone has its effects added
 to the destination summing node of all zones in the given instrument.
 </LI><LI>
-If the generator operator is a Range Generator, the generator values
-are NOT ADDED to those in the instrument level, rather they serve as an
-intersection filter to those key number or
+If the generator operator is a Range Generator,
+the generator values are NOT ADDED to those in the instrument level,
+rather they serve as an intersection filter to those key number or
 velocity ranges in the instrument that is used in the preset zone.
 </LI><LI>
 <A NAME="p66"></A>
@@ -3331,21 +3329,19 @@ structure defines a real-time perceptually additive effect
 to be applied to a given destination or synthesizer parameter.
 </P><A NAME="9.5.1"></A><P>
 <B>9.5.1 Controller Model Theory of Operation</B>
-The SoundFont Modulator Controller model is a general-purpose mechanism
-intended to allow forflexible and complex real-time control over the
-synthesis parameters provided. While SoundFont 2.00
-provides a mechanism to set initial conditions for a wide variety
-of synthesis parameters or generators atmultiple levels of hierarchy
-(Preset/Instrument level, Global/Local zones, etc.), the addition of the
-SoundFont Modulator Controller Model provides a mechanism to allow
-real-time control over thosesame parameters at the same levels of
-hierarchy.
+The SoundFont Modulator Controller model is a general-purpose
+mechanism intended to allow for flexible and complex
+real-time control over the synthesis parameters provided.
+While SoundFont 2.00 provides a mechanism to set initial conditions for a
+wide variety of synthesis parameters or generators atmultiple levels of
+hierarchy (Preset/Instrument level, Global/Local zones, etc.), the addition
+of the SoundFont Modulator Controller Model provides a mechanism to allow
+real-time control over thosesame parameters at the same levels of hierarchy.
 </P><P>
-The SoundFont Modulator Controller model is what it takes to turn the
-rather simplistic generator basedsynthesis model into a complex and much
-more interesting synthesis model.
-The following diagram shows the general nature the SoundFont controller
-model:
+The SoundFont Modulator Controller model is what it takes
+to turn the rather simplistic generator based synthesis model
+into a complex and much more interesting synthesis model.
+The following diagram shows the general nature the SoundFont controller model:
 </P><P>
 <A NAME="p67"></A>
 Transform
@@ -3374,7 +3370,7 @@ upon its controller direction and controller type. The result of the
 secondary controller source inputshould be multiplied by the given amount,
 and that value should be multiplied by the primary controller
 source mapped value. This value should then be fed into a transform,
-which should be a mathematicalexpression which knows of no minimum or
+which should be a mathematical expression which knows of no minimum or
 maximum amounts, and the result of this transformation
 should be added to the destination summing node.
 In simpler terms, the equation for a given destination summing node is:
@@ -3624,7 +3620,7 @@ The following table shows how SoundFont modulator sources are mapped to
 the SoundFont controllerminimum and maximum values.
 </P><P>
 Note that due to the fact that MIDI has an even number of distributed
-points in their controllers, themaximum position can not correspond to
+points in their controllers, the maximum position can not correspond to
 exactly 1.<BR>
 Table 2: Controller Native to Input Value Mappings
 </P><A NAME="9.6"></A><P>
@@ -3747,7 +3743,7 @@ The Data Entry values are used to send an ADDITIVE response to a generator
 value, exactly the same as a modulator.Since you have 2 controllers for a
 Data Entry message, the Data Entry values make up a single 14-bit value.
 The Data Entry value is "applied" to a generator at the time the MSB
-message is sent in. In other words, when the MSB message issent,
+message is sent in. In other words, when the MSB message is sent,
 this value is combined with the most recently sent LSB message
 and then added to the appropriate generator value.
 </P><P>
@@ -3919,8 +3915,7 @@ typedef struct romHdrType{
    BYTE sampleCompType; // indicates type of sample precompensation used
    CHAR filler1[2]; // future use
    CHAR style[16]; // sound library style
-   CHAR copyright[80]; // copyright notice
-<A NAME="p80"></A>
+   CHAR copyright[80]; // copyright notice <A NAME="p80"></A>
    DWORD sampleStart; // beginning byte address of the SoundFont bank
    DWORD sineWaveStart; // beginning byte address of the sine wave sample
    DWORD filler2[124]; // future use
@@ -4209,7 +4204,7 @@ by applying a low frequency oscillator to the oscillator pitch.<BR>
 volume - The loudness or amplitude of a sound, or the control of this
 parameter.<BR>
 wavetable - A music synthesis technique wherein musical sounds are
-recorded or computedmathematically and stored in a memory, then played
+recorded or computed mathematically and stored in a memory, then played
 back at a variable rate to produce the desired pitch.
 Additional timbre adjustments are often made to the sound thus produced
 using amplifiers, filters, andeffect processing such as reverb and chorus.
