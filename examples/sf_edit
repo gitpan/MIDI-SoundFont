@@ -14,8 +14,8 @@ eval 'require Term::Clui'; if ($@) {
 use Data::Dumper(Dumper);
 $Data::Dumper::Indent = 1;  $Data::Dumper::Sortkeys = 1;
 use bytes;
-my $Version       = $MIDI::SoundFont::VERSION;
-my $VersionDate   = $MIDI::SoundFont::VERSION_DATE;
+my $Version       = '1.03';
+my $VersionDate   = '19mar2012';
 
 my @Banks = ();
 while ($ARGV[$[] =~ /^-([a-z])/) {
@@ -246,6 +246,7 @@ sub sf_move_bank { my %sf = @_;
 
 sub sf_write { my %sf = @_;
 	my $file = Term::Clui::ask_filename(" write to which file ?");
+warn "file=$file\n";
 	if (! $file) { return; }
 	if ((-e $file) && (! Term::Clui::confirm(" OK to overwrite $file ?"))) {
 		return;

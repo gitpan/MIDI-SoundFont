@@ -112,6 +112,7 @@ $sf{'phdr'}[0]{'wBank'} = 5;
 $sf{'phdr'}[0]{'achPresetName'} = 'SawtoothToTriangle';
 my %smpl_0 = sf_sawtooth2triangle();
 $sf{'shdr'}{'smpl_0'} = \%smpl_0;
+
 push @{$sf{'phdr'}}, {
 achPresetName => 'SquareToSine',
   pbags => [

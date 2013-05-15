@@ -146,7 +146,12 @@ ok($c[78] eq '75 %font Jeux14.sf2 0 75   # Schalmei 8',
 ok(3 == scalar @c, 'timidity_cfg on gravis/fiddle.pat');
 @c = split("\n",
  MIDI::SoundFont::timidity_cfg('gravis/Gravis.zip',%gravis_zip));
-ok($c[48] eq '99 atmosphr.pat', 'timidity_cfg on gravis/Gravis.zip');
+eval 'require String::Approx';
+if ($@) {
+	ok(1, 'String::Approx not installed; skipping Gravis.zip test');
+} else {
+	ok($c[48] eq '99 atmosphr.pat', 'timidity_cfg on gravis/Gravis.zip');
+}
 
 exit;
 

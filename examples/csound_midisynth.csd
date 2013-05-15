@@ -1,7 +1,7 @@
 <CsoundSynthesizer>
 <CsOptions>
 ; -d -m229 -o dac -T -F midifile.mid
--d -m0 -M0 -iadc -odac
+-d -rtmidi=alsa -m0 -MPro -iadc -odac
 </CsOptions>
 <CsInstruments>
 sr = 44100
@@ -10,12 +10,6 @@ nchnls = 2
 0dbfs = 1
 
 ; Example by Istvan Varga
-; not bad, but doesn't handle bank changes; so even after setting bank 5:
-; fluidsynth: error: There is no preset with bank number 0 and
-;   preset number 1 in SoundFont 1
-; presumably I have to intercept cc0 and cc32 events and set
-; the penultimate kbnk arg to fluidProgramSelect_k and hence
-; fluidProgramSelect accordingly...
 
 ; disable triggering of instruments by MIDI events
 
@@ -29,7 +23,7 @@ lp1:
 
 gifld   fluidEngine
 gisf2   fluidLoad "/tmp/Bank5.sf2", gifld, 1
-giBank=5
+giBank = 5
 
 ; k-rate version of fluidProgramSelect
 

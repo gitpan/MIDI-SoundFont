@@ -11,9 +11,10 @@ package MIDI::SoundFont;
 no strict;
 use bytes;
 #my $debug = 1; use Data::Dumper;
-$VERSION = '1.05';
+$VERSION = '1.06';
 $VERSION_DATE = '09aug2012';
 
+# 20120809 1.06 added the csound_scoresynth and csound_midisynth examples
 # 20120809 1.05 added the csound_scoresynth and csound_midisynth examples
 # 20120322 1.04 pack a=zeropadded rather than A=spacepadded; introduce
 #               new_gf(), gravis2file now works, and make_bank5 does gravis too
@@ -38,7 +39,7 @@ eval 'require File::Format::RIFF';
 if ($@) {
  die "you need to install the File::Format::RIFF module from www.cpan.org\n";
 }
-local $[ = 0;   # SoundFont indexes start at zero
+# local $[ = 0; # SoundFont indexes start at zero but setting $[ is deprecated
 my %SampleName = ();   # to avoid duplicating sample-names...
 
 # ----------------------- exportable constants -----------------------
