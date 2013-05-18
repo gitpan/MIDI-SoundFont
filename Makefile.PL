@@ -8,4 +8,12 @@ WriteMakefile(
 	AUTHOR    => 'PJB, Peter Billam, www.pjb.com.au/comp/contact.html',
 	ABSTRACT  => 'Handles .sf2 SoundFont and .pat and .zip Gravis files',
 	dist      => {COMPRESS=>'gzip -9f', SUFFIX => 'gz'},
+	PREREQ_PM => {
+		'Archive::Zip' => 0,
+		'File::Basename' => 0,
+		'File::Format::RIFF' => 0,
+		'File::Temp' => 0,
+		'LWP::Simple' => 0,
+		'String::Approx' => 0,
+	}
 );
