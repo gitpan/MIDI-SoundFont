@@ -35,7 +35,7 @@ iamp = p4
 asigL, asigR fluidOut giEngine
 asigL = asigL * iamp
 asigR = asigR * iamp
-outs asigL, asig R
+outs asigL, asigR
 endin
 
 </CsInstruments>

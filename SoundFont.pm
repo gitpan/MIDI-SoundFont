@@ -11,10 +11,10 @@ package MIDI::SoundFont;
 no strict;
 use bytes;
 #my $debug = 1; use Data::Dumper;
-$VERSION = '1.07';
-$VERSION_DATE = '15may2013';
+$VERSION = '1.08';
+$VERSION_DATE = '18may2013';
 
-# 20130??? 1.07
+# 20130518 1.07 Makefile.PL specifies PREREQ_PM, to improve test results :-)
 # 20130515 1.06 test.pl skips Gravis.zip test if String::Approx not installed
 # 20120809 1.05 added the csound_scoresynth and csound_midisynth examples
 # 20120322 1.04 pack a=zeropadded rather than A=spacepadded; introduce

@@ -1,4 +1,5 @@
-201305?? 1.07 Makepfile.PL specifies PREREQ_PM, to improve test results :-)
+20130701 1.08 typo fixed in examples/csound_scoresynth.csd
+20130518 1.07 Makepfile.PL specifies PREREQ_PM, to improve test results :-)
 20130515 1.06 test.pl skips Gravis.zip test if String::Approx not installed
 20120809 1.05 added the csound_scoresynth and csound_midisynth examples
 20120322 1.04 pack a=zeropadded rather than A=spacepadded; introduce

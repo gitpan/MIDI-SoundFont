@@ -51,15 +51,15 @@ if ($file_type eq 'sf2') {
 		my $task = Term::Clui::choose("do what with $file ?", @tasks);
 		if (! $task or $task eq 'Quit')    { last; }
 		if ($task eq 'Move bank')          { sf_move_bank(%sf);
-		} elsif ($task eq 'Move patch')    {
-		} elsif ($task eq 'Copy patch')    {
+		} elsif ($task eq 'Move patch')    { not_yet_implemented();
+		} elsif ($task eq 'Copy patch')    { not_yet_implemented();
 		} elsif ($task eq 'Edit')          { sf_edit_dump(\%sf);
 		} elsif ($task eq 'Edit INFO')     { sf_edit_info(\%sf);
-		} elsif ($task eq 'Import gravis') {
-		} elsif ($task eq 'Import wav')    {
+		} elsif ($task eq 'Import gravis') { not_yet_implemented();
+		} elsif ($task eq 'Import wav')    { not_yet_implemented();
 		} elsif ($task eq 'List')          { sf_list(%sf);
 		} elsif ($task eq 'Delete bank')   { sf_delete_bank(%sf);
-		} elsif ($task eq 'Delete patch')  {
+		} elsif ($task eq 'Delete patch')  { not_yet_implemented();
 		} elsif ($task eq 'Write')         { sf_write(%sf);
 		} elsif ($task eq 'Config')        { config(%sf);
 		}
@@ -91,8 +91,8 @@ if ($file_type eq 'sf2') {
 		if (! $task or $task eq 'Quit')    { last; }
 		if      ($task eq 'Edit INFO')     { gr_edit_info(\%gr);
 		} elsif ($task eq 'Edit')          { deep_edit(\%gr);
-		} elsif ($task eq 'Import sf2')    {
-		} elsif ($task eq 'Import wav')    {
+		} elsif ($task eq 'Import sf2')    { not_yet_implemented();
+		} elsif ($task eq 'Import wav')    { not_yet_implemented();
 		} elsif ($task eq 'List')          { gr_list(%gr);
 		} elsif ($task eq 'Delete patch')  { gr_delete_patch(%gr);
 		} elsif ($task eq 'Write')         { gr_write(%gr);
@@ -107,6 +107,9 @@ if ($file_type eq 'sf2') {
 exit;
 
 # -----------------------------------------------------------------
+sub not_yet_implemented {
+	Term::Clui::sorry('not yet implemented');
+}
 
 sub filetype { my $f = $_[$[];
 	if (! open(F, $f)) { die "can't open $f: $!\n"; }
@@ -246,7 +249,7 @@ sub sf_move_bank { my %sf = @_;
 
 sub sf_write { my %sf = @_;
 	my $file = Term::Clui::ask_filename(" write to which file ?");
-warn "file=$file\n";
+	# warn "file=$file\n";
 	if (! $file) { return; }
 	if ((-e $file) && (! Term::Clui::confirm(" OK to overwrite $file ?"))) {
 		return;
